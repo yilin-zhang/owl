@@ -40,18 +40,23 @@ OWL_NAME=Taylor claude
 `global` is reserved. Unset `OWL_NAME` or set `OWL_NAME=global` to use global
 memory intentionally.
 
-## Agent Setup
+## Opt-In Agent Skill
 
-Agent apps should include an Owl startup rule in their own `AGENTS.md` or
-equivalent config:
+Owl does not have to be forced into every agent session. When an agent should
+coordinate through Owl, give it the built-in Owl skill:
 
-```markdown
-At startup, run `owl whoami --format json`, `owl memory show`, and
-`owl message inbox`. Use `OWL_NAME=<name>` when launching this agent. Write
-important durable facts, user preferences, and project decisions with
-`owl memory write "...";` do not rely on chat history alone. After finishing a
-task, start `owl message watch --format json` and leave it in the foreground
-so new messages can wake the agent.
+```bash
+owl spells cast owl
+```
+
+The skill carries the operating instructions for identity, mail, memory, perch,
+and watching. To inspect the focused sub-skills:
+
+```bash
+owl spells list owl --all
+owl spells cast owl/messages
+owl spells cast owl/memory
+owl spells cast owl/perch
 ```
 
 ## Basic Usage
@@ -116,6 +121,7 @@ Custom spells go under `$OWL_HOME/spells`.
 ```bash
 uv lock
 owl --help
-uv run python -m unittest discover -s tests
+uv run pytest
+uv run python -m compileall src tests
 uvx mypy src tests
 ```

@@ -1,10 +1,28 @@
 ---
-description: Use Owl itself: identify agents, read mail, write memory, discover spells, and choose the right owl subcommand.
+description: Opt in to Owl coordination: identify the agent, read mail, write memory, inspect perch, watch for messages, and choose the right owl subcommand.
 ---
 
 # Owl
 
-Use this spell when you need to operate Owl from an agent session.
+Use this skill when the current task or project has opted into Owl coordination.
+The skill is the canonical agent-facing operating guide for Owl; use focused
+sub-skills only when you need deeper detail.
+
+## Startup Checklist
+
+When Owl is active for the session, orient before doing delegated work:
+
+```bash
+owl whoami --format json
+owl memory show --format json
+owl message inbox --format json
+```
+
+Read unread messages that are relevant to the current work:
+
+```bash
+owl message read <message-id>
+```
 
 ## Identity
 
@@ -18,13 +36,16 @@ owl whoami
 Do not use identity flags. Owl reads the current agent name from `OWL_NAME`, or
 uses `global` when `OWL_NAME` is unset.
 
+Unset `OWL_NAME` intentionally means the shared `global` identity. Individual
+identities see global memory plus their own memory; the global identity sees all
+memory.
+
 ## Mail
 
-Check mail before starting delegated work:
+Inspect mailbox state:
 
 ```bash
 owl message inbox --format json
-owl message read <message-id>
 owl message sent --format json
 ```
 
@@ -43,7 +64,7 @@ when the current identity has pending mail. Data output remains on stdout.
 
 ## Memory
 
-Use memory for durable facts that should survive context compaction:
+Use memory for short durable facts that should survive context compaction:
 
 ```bash
 owl memory show --format json
@@ -51,8 +72,9 @@ owl memory write "A concise durable fact."
 owl memory compact "Current compacted memory summary."
 ```
 
-Individual identities see global memory plus their own memory. The `global`
-identity sees all memory.
+Write only facts worth carrying into future agent sessions: user preferences,
+project decisions, handoff state, and compact summaries. Do not use global
+memory for transient progress updates.
 
 ## Spells
 
@@ -77,7 +99,8 @@ owl perch status --format json
 
 ## Watch
 
-When an Owl-managed agent finishes useful work, start:
+When an Owl-managed agent finishes useful work and should remain reachable,
+start:
 
 ```bash
 owl message watch --format json

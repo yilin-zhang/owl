@@ -21,3 +21,11 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 owl_cli = ["builtin_spells/**/SKILL.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]

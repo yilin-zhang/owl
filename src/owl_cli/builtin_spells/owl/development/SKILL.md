@@ -27,7 +27,7 @@ Keep built-in spell files under `src/owl_cli/builtin_spells`, not beside
 ## Verify
 
 ```bash
-uv run python -m unittest discover -s tests
+uv run pytest
 uv run python -m compileall src tests
 uvx mypy src tests
 uv run owl spells list owl --all --format json
