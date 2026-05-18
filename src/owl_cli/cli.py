@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from .agents import list_states, resolve_name, status_for_state, touch_state
@@ -20,7 +21,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     store = Store()
     try:
-        return args.func(args, store)
+        code = args.func(args, store)
+        if code == 0:
+            maybe_report_unread(args, store)
+        return code
     except OwlError as exc:
         return die(str(exc))
     except KeyboardInterrupt:
@@ -52,9 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
     message = subparsers.add_parser("message", help="Mailbox commands.")
     message_sub = message.add_subparsers(dest="message_command", required=True)
     message_send = message_sub.add_parser("send")
-    message_send.add_argument("recipient")
-    message_send.add_argument("body")
+    message_send.add_argument("recipient", nargs="?")
+    message_send.add_argument("body_arg", nargs="?")
+    message_send.add_argument("--to", action="append", default=[])
     message_send.add_argument("--cc", action="append", default=[])
+    message_send.add_argument("--body")
+    message_send.add_argument("--body-file")
+    message_send.add_argument("--stdin", action="store_true", dest="body_stdin")
     add_format(message_send)
     message_send.set_defaults(func=cmd_message_send)
     message_inbox = message_sub.add_parser("inbox")
@@ -144,7 +152,8 @@ def cmd_memory_compact(args: argparse.Namespace, store: Store) -> int:
 
 def cmd_message_send(args: argparse.Namespace, store: Store) -> int:
     sender = resolve_name()
-    event = send_message(store, sender, [args.recipient], args.cc, args.body)
+    recipients, body = message_send_inputs(args)
+    event = send_message(store, sender, recipients, args.cc, body)
     row = {
         "id": event["id"],
         "from": event["from"],
@@ -208,13 +217,21 @@ def cmd_message_watch(args: argparse.Namespace, store: Store) -> int:
                     return 0
                 continue
             now = time.monotonic()
+            if now >= next_pulse:
+                count = unread_count(store, ref)
+                if count:
+                    report_unread(ref.key, count, args.format)
+                    return 0
+                touch_state(store, ref)
+                next_pulse = now + pulse_interval
             if deadline is not None and now >= deadline:
+                count = unread_count(store, ref)
+                if count:
+                    report_unread(ref.key, count, args.format)
+                    return 0
                 if args.format == "json":
                     write_json_line({"event": "timeout", "agent": ref.key})
                 return 0
-            if now >= next_pulse:
-                touch_state(store, ref)
-                next_pulse = now + pulse_interval
 
 
 def report_unread(agent: str, count: int, fmt: str) -> None:
@@ -254,3 +271,48 @@ def cmd_spells_list(args: argparse.Namespace, store: Store) -> int:
 def cmd_spells_cast(args: argparse.Namespace, store: Store) -> int:
     print(cast_spell(store, args.path))
     return 0
+
+
+def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
+    body_sources = [
+        args.body is not None,
+        args.body_file is not None,
+        args.body_stdin,
+    ]
+    if sum(body_sources) > 1:
+        raise OwlError("choose only one message body source")
+    if any(body_sources) and args.body_arg is not None:
+        raise OwlError("positional body cannot be used with --body, --body-file, or --stdin")
+
+    recipients = []
+    if args.recipient is not None:
+        recipients.append(args.recipient)
+    if args.body is not None:
+        body = args.body
+    elif args.body_file is not None:
+        try:
+            body = Path(args.body_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise OwlError(f"failed to read message body file: {exc}") from exc
+    elif args.body_stdin:
+        body = sys.stdin.read()
+    else:
+        if args.body_arg is not None:
+            body = args.body_arg
+        else:
+            raise OwlError("message requires recipients and a body")
+
+    return [*recipients, *args.to], body
+
+
+def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:
+    if getattr(args, "command", None) == "message" and getattr(args, "message_command", None) == "watch":
+        return
+    try:
+        ref = resolve_name()
+        count = unread_count(store, ref)
+    except OwlError as exc:
+        print(f"owl: message check failed: {exc}", file=sys.stderr)
+        return
+    if count:
+        print(f"owl: {count} unread message(s). Run `owl message inbox`.", file=sys.stderr)

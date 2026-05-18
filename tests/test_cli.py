@@ -11,11 +11,16 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from owl_cli.cli import main
+from owl_cli.constants import EVENT_MESSAGE
+from owl_cli.messages import append_message_event
+from owl_cli.store import Store
+from owl_cli.utils import utc_now
 
 
 class CliTest(unittest.TestCase):
@@ -67,6 +72,23 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(json.loads(stdout)["key"], "global")
 
+    def test_empty_owl_name_is_rejected(self) -> None:
+        os.environ["OWL_NAME"] = ""
+        code, _stdout, stderr = self.run_cli("whoami")
+        self.assertEqual(code, 1)
+        self.assertIn("OWL_NAME cannot be empty", stderr)
+
+    def test_global_key_is_reserved_for_literal_global(self) -> None:
+        os.environ["OWL_NAME"] = "Global"
+        code, _stdout, stderr = self.run_cli("whoami")
+        self.assertEqual(code, 1)
+        self.assertIn("global is reserved", stderr)
+
+        os.environ["OWL_NAME"] = "global"
+        code, stdout, stderr = self.run_cli("whoami", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["key"], "global")
+
     def test_message_send_inbox_read_sent(self) -> None:
         os.environ["OWL_NAME"] = "Sarah"
         code, stdout, stderr = self.run_cli(
@@ -112,6 +134,71 @@ class CliTest(unittest.TestCase):
         os.environ["OWL_NAME"] = "Lee"
         code, _stdout, stderr = self.run_cli("message", "read", message_id)
         self.assertEqual(code, 0, stderr)
+
+    def test_message_send_multiple_primary_recipients_and_body_sources(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "Tom",
+            "--to",
+            "Lee",
+            "--body",
+            "hello team",
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        sent = json.loads(stdout)
+        self.assertEqual(sent["to"], "tom,lee")
+
+        os.environ["OWL_NAME"] = "Lee"
+        code, stdout, stderr = self.run_cli("message", "inbox", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)[0]["preview"], "hello team")
+
+        body_file = Path(self.tmp.name) / "body.txt"
+        body_file.write_text("body from file\n", encoding="utf-8")
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "--to",
+            "Tom",
+            "--body-file",
+            str(body_file),
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["to"], "tom")
+
+        code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "--body-file", str(body_file / "missing"))
+        self.assertEqual(code, 1)
+        self.assertIn("failed to read message body file", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "accidental", "--body", "real")
+        self.assertEqual(code, 1)
+        self.assertIn("positional body cannot be used", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "--to", "Lee")
+        self.assertEqual(code, 1)
+        self.assertIn("message requires recipients and a body", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "body without positional recipient")
+        self.assertEqual(code, 1)
+        self.assertIn("message requires recipients and a body", stderr)
+
+    def test_commands_piggyback_unread_notification_on_stderr(self) -> None:
+        os.environ["OWL_NAME"] = "Tom"
+        code, _stdout, stderr = self.run_cli("message", "send", "Sarah", "hello")
+        self.assertEqual(code, 0, stderr)
+
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli("whoami", "--format", "json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(stdout)["key"], "sarah")
+        self.assertIn("1 unread message", stderr)
 
     def test_message_defaults_to_global_sender_and_rejects_empty_recipient(self) -> None:
         code, stdout, stderr = self.run_cli("message", "send", "Tom", "body", "--format", "json")
@@ -284,6 +371,50 @@ class CliTest(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("1 unread message", stderr)
         self.assertLess(elapsed, 2.5)
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
+    def test_watch_pulse_exits_when_notification_is_missed(self) -> None:
+        env = os.environ.copy()
+        env["OWL_HOME"] = self.tmp.name
+        env["OWL_NAME"] = "Tom"
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "owl_cli",
+                "message",
+                "watch",
+                "--interval",
+                "0.1",
+                "--timeout",
+                "5",
+                "--format",
+                "json",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.wait_for_path(Path(self.tmp.name) / "state" / "agents" / "tom.watch.sock")
+        append_message_event(
+            Store(Path(self.tmp.name)),
+            {
+                "type": EVENT_MESSAGE,
+                "id": str(uuid.uuid4()),
+                "from": "sarah",
+                "from_name": "Sarah",
+                "to": ["tom"],
+                "cc": [],
+                "created_at": utc_now(),
+                "body": "missed notification",
+            },
+        )
+        stdout, stderr = proc.communicate(timeout=2)
+        self.assertEqual(proc.returncode, 0, stderr)
+        self.assertEqual(json.loads(stdout), {"agent": "tom", "event": "message", "unread": 1})
 
     @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
     def test_watch_replaces_existing_watcher_for_same_agent(self) -> None:

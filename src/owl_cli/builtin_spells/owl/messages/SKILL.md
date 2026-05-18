@@ -20,9 +20,15 @@ owl message read <message-id>
 ```bash
 owl message send Tom "Please inspect the failing test."
 owl message send Tom --cc Lee "Please inspect the failing test."
+owl message send Tom --to Lee "Please inspect the failing test."
+owl message send --to Tom --body "Please inspect the failing test."
+owl message send --to Tom --body-file ./review.md
 ```
 
-Use `--cc` for CC recipients. The primary recipient is one name; do not encode recipient lists inside the positional name.
+Use `--to` for additional primary recipients and `--cc` for CC recipients. Do not encode recipient lists inside one name.
+
+Successful non-watch Owl commands print an unread-message reminder to stderr
+when the current identity has pending mail. Data output remains on stdout.
 
 ## Sent Mail
 
@@ -35,7 +41,11 @@ Sent output includes per-recipient read state. Use JSON when another agent will 
 ## Watching
 
 ```bash
-owl message watch --timeout 120 --format json
+owl message watch --format json
 ```
 
-Watch waits for new mail addressed to the current identity and exits when unread mail arrives.
+Watch waits for mail addressed to the current identity and exits when unread
+mail exists. It has no default timeout; use `--timeout` only when a finite wait
+is explicitly desired. The quiet keepalive interval defaults to 300 seconds and
+also checks for missed mail. Starting a watcher for the same identity replaces
+the previous watcher.

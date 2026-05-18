@@ -33,7 +33,13 @@ Send to a recipient from the current identity:
 ```bash
 owl message send Tom "Message body"
 owl message send Tom --cc Lee "Message body"
+owl message send Tom --to Lee "Message body"
+owl message send --to Tom --body "Message body"
+owl message send --to Tom --body-file ./note.md
 ```
+
+Successful non-watch Owl commands print an unread-message reminder to stderr
+when the current identity has pending mail. Data output remains on stdout.
 
 ## Memory
 
@@ -58,3 +64,15 @@ owl spells cast owl/messages
 ```
 
 Prefer JSON output for agent parsing and TSV for quick human inspection.
+
+## Watch
+
+When an Owl-managed agent finishes useful work, start:
+
+```bash
+owl message watch --format json
+```
+
+Watch is one-shot: it stays alive until unread mail exists, then exits. It has
+no default timeout. The quiet keepalive interval defaults to 300 seconds and
+also checks for missed mail.

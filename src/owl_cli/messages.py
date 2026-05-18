@@ -4,6 +4,7 @@ import os
 import select
 import signal
 import socket
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -228,13 +229,19 @@ class WatchRegistration:
             prior = self.store.read_json(self.path, None)
             if isinstance(prior, dict):
                 prior_pid = prior.get("pid")
-                if isinstance(prior_pid, int) and prior_pid != self.pid:
-                    stop_process(prior_pid)
+                prior_command = prior.get("command")
+                if (
+                    isinstance(prior_pid, int)
+                    and prior_pid != self.pid
+                    and watcher_process_matches(prior_pid, prior_command)
+                ):
+                    stop_process(prior_pid, timeout=1.0)
             unlink_if_exists(watch_socket_path(self.store, self.ref.key))
             self.store.write_json(
                 self.path,
                 {
                     "agent": self.ref.key,
+                    "command": process_command(self.pid),
                     "pid": self.pid,
                     "started_at": utc_now(),
                 },
@@ -251,7 +258,7 @@ class WatchRegistration:
                     pass
 
 
-def stop_process(pid: int, timeout: float = 0.0) -> None:
+def stop_process(pid: int, timeout: float = 0.0, force: bool = False) -> None:
     if pid <= 0:
         return
     if not process_alive(pid):
@@ -267,7 +274,7 @@ def stop_process(pid: int, timeout: float = 0.0) -> None:
         if not process_alive(pid):
             return
         time.sleep(0.05)
-    if process_alive(pid):
+    if force and process_alive(pid):
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -284,6 +291,29 @@ def process_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def watcher_process_matches(pid: int, expected_command: object) -> bool:
+    if not isinstance(expected_command, str):
+        return False
+    return process_command(pid) == expected_command
+
+
+def process_command(pid: int) -> str | None:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=1.0,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    command = result.stdout.strip()
+    return command or None
 
 
 def watch_socket_path(store: Store, key: str) -> Path:

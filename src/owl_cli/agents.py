@@ -29,11 +29,24 @@ def normalize_name(name: str) -> str:
 
 
 def make_ref(name: str) -> AgentRef:
-    return AgentRef(name=name.strip(), key=normalize_name(name))
+    display_name = name.strip()
+    key = normalize_name(display_name)
+    if key == GLOBAL_AGENT_NAME and display_name != GLOBAL_AGENT_NAME:
+        raise OwlError("global is reserved; unset OWL_NAME or set OWL_NAME=global to use it")
+    return AgentRef(name=display_name, key=key)
 
 
 def resolve_name(explicit: str | None = None) -> AgentRef:
-    value = explicit or os.environ.get(OWL_NAME_ENV_VAR) or GLOBAL_AGENT_NAME
+    if explicit is not None:
+        value = explicit
+    else:
+        env_value = os.environ.get(OWL_NAME_ENV_VAR)
+        if env_value is None:
+            value = GLOBAL_AGENT_NAME
+        elif not env_value.strip():
+            raise OwlError("OWL_NAME cannot be empty; unset it to use global")
+        else:
+            value = env_value
     return make_ref(value)
 
 
