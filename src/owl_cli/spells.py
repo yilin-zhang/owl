@@ -27,8 +27,8 @@ class SkillApp:
 
     def skill_path(self, spell_key: str | None) -> Path:
         if not spell_key:
-            return self.home() / "skills" / "SKILL.md"
-        return self.home() / "skills" / spell_key / "SKILL.md"
+            raise OwlError("install requires a named spell path")
+        return self.home() / "skills" / spell_key
 
 
 SKILL_APPS = {
@@ -139,18 +139,36 @@ def resolve_spell_file(store: Store, path: str) -> Path:
 
 def install_spell(store: Store, path: str, app: str = "codex") -> Path:
     key = normalize_spell_path(path)
-    source = resolve_spell_file(store, path)
+    if not key:
+        raise OwlError("install requires a named spell path")
+    source = resolve_spell_file(store, path).parent
     destination = skill_install_path(app, key)
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            destination.unlink()
-        except FileNotFoundError:
-            pass
-        destination.symlink_to(source.resolve())
+        remove_existing_skill_install(destination)
+        destination.symlink_to(source.resolve(), target_is_directory=True)
     except OSError as exc:
         raise OwlError(f"failed to install spell: {exc}") from exc
     return destination
+
+
+def remove_existing_skill_install(destination: Path) -> None:
+    if destination.is_symlink() or destination.is_file():
+        destination.unlink()
+        return
+    if not destination.exists():
+        return
+    if destination.is_dir():
+        entries = list(destination.iterdir())
+        legacy_skill_file = destination / "SKILL.md"
+        if not entries:
+            destination.rmdir()
+            return
+        if len(entries) == 1 and (legacy_skill_file.is_symlink() or legacy_skill_file.is_file()):
+            legacy_skill_file.unlink()
+            destination.rmdir()
+            return
+    raise OwlError(f"skill install path already exists and is not replaceable: {destination}")
 
 
 def skill_install_path(app: str, key: str | None) -> Path:

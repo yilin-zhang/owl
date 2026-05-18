@@ -97,17 +97,18 @@ def test_spells_install_writes_codex_skill(cli: CliRunner) -> None:
 
     code, stdout, stderr = cli.run("spells", "install", "owl", "--format", "json")
     assert code == 0, stderr
-    destination = Path(cli.home) / "codex" / "skills" / "owl" / "SKILL.md"
+    destination = Path(cli.home) / "codex" / "skills" / "owl"
     assert json.loads(stdout) == {"path": "owl", "installed_to": str(destination)}
     assert destination.is_symlink()
-    assert destination.read_text(encoding="utf-8") + "\n" == cast_stdout
+    assert (destination / "SKILL.md").read_text(encoding="utf-8") + "\n" == cast_stdout
 
     destination.unlink()
-    destination.write_text("stale\n", encoding="utf-8")
+    destination.mkdir()
+    (destination / "SKILL.md").write_text("stale\n", encoding="utf-8")
     code, _stdout, stderr = cli.run("spells", "install", "owl")
     assert code == 0, stderr
     assert destination.is_symlink()
-    assert destination.read_text(encoding="utf-8") + "\n" == cast_stdout
+    assert (destination / "SKILL.md").read_text(encoding="utf-8") + "\n" == cast_stdout
 
     custom = Path(cli.home) / "spells" / "owl" / "SKILL.md"
     custom.parent.mkdir(parents=True)
@@ -117,15 +118,15 @@ def test_spells_install_writes_codex_skill(cli: CliRunner) -> None:
     code, _stdout, stderr = cli.run("spells", "install", "owl")
     assert code == 0, stderr
     assert destination.is_symlink()
-    assert destination.resolve() == custom.resolve()
-    assert destination.read_text(encoding="utf-8") + "\n" == custom_cast_stdout
+    assert destination.resolve() == custom.parent.resolve()
+    assert (destination / "SKILL.md").read_text(encoding="utf-8") + "\n" == custom_cast_stdout
 
 
 def test_spells_install_uses_default_codex_home(cli: CliRunner) -> None:
     os.environ["HOME"] = str(Path(cli.home) / "home")
     code, stdout, stderr = cli.run("spells", "install", "owl", "--format", "json")
     assert code == 0, stderr
-    destination = Path(cli.home) / "home" / ".codex" / "skills" / "owl" / "SKILL.md"
+    destination = Path(cli.home) / "home" / ".codex" / "skills" / "owl"
     assert json.loads(stdout) == {"path": "owl", "installed_to": str(destination)}
     assert destination.is_symlink()
 
@@ -137,7 +138,7 @@ def test_spells_install_treats_empty_app_home_env_as_explicit_path(cli: CliRunne
     with contextlib.chdir(cwd):
         code, stdout, stderr = cli.run("spells", "install", "owl", "--format", "json")
     assert code == 0, stderr
-    destination = Path("skills") / "owl" / "SKILL.md"
+    destination = Path("skills") / "owl"
     assert json.loads(stdout) == {"path": "owl", "installed_to": str(destination)}
     assert (cwd / destination).is_symlink()
 
@@ -157,10 +158,34 @@ def test_spells_install_writes_claude_code_skill(cli: CliRunner) -> None:
         "json",
     )
     assert code == 0, stderr
-    destination = Path(cli.home) / "claude" / "skills" / "owl" / "SKILL.md"
+    destination = Path(cli.home) / "claude" / "skills" / "owl"
     assert json.loads(stdout) == {"path": "owl", "installed_to": str(destination)}
     assert destination.is_symlink()
-    assert destination.read_text(encoding="utf-8") + "\n" == cast_stdout
+    assert (destination / "SKILL.md").read_text(encoding="utf-8") + "\n" == cast_stdout
+
+
+def test_spells_install_does_not_replace_populated_skill_directory(cli: CliRunner) -> None:
+    os.environ["CODEX_HOME"] = str(Path(cli.home) / "codex")
+    destination = Path(cli.home) / "codex" / "skills" / "owl"
+    destination.mkdir(parents=True)
+    (destination / "SKILL.md").write_text("local\n", encoding="utf-8")
+    (destination / "asset.txt").write_text("keep\n", encoding="utf-8")
+
+    code, _stdout, stderr = cli.run("spells", "install", "owl")
+    assert code == 1
+    assert "skill install path already exists and is not replaceable" in stderr
+    assert not destination.is_symlink()
+    assert (destination / "asset.txt").read_text(encoding="utf-8") == "keep\n"
+
+
+def test_spells_install_requires_named_spell_path(cli: CliRunner) -> None:
+    root_spell = Path(cli.user_home) / "spells" / "SKILL.md"
+    root_spell.parent.mkdir(parents=True)
+    root_spell.write_text("---\ndescription: Root spell.\n---\n\n# Root\n", encoding="utf-8")
+
+    code, _stdout, stderr = cli.run("spells", "install", "")
+    assert code == 1
+    assert "install requires a named spell path" in stderr
 
 
 def test_spells_install_unknown_path_is_rejected(cli: CliRunner) -> None:
