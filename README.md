@@ -65,12 +65,15 @@ Send messages and read your inbox:
 
 ```bash
 owl message send Tom "Please review the patch"
-owl message send Tom --to Lee "Please review the patch"
-owl message send --to Tom --body "Please review the patch"
+owl message send --to Tom --to Lee --body "Please review the patch"
 owl message send --to Tom --body-file ./note.md
+owl message send --to Tom --stdin < ./note.md
 owl message inbox
 owl message read <message-id>
 ```
+
+Use `--body-file` or `--stdin` for multiline bodies, command examples, quotes,
+or other shell-sensitive text.
 
 Successful non-watch commands print an unread-message reminder to stderr when
 the current identity has pending mail. Command data still goes to stdout.

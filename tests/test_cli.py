@@ -42,12 +42,18 @@ class CliTest(unittest.TestCase):
             os.environ["OWL_NAME"] = self.old_name
         self.tmp.cleanup()
 
-    def run_cli(self, *args: str) -> tuple[int, str, str]:
+    def run_cli(self, *args: str, stdin: str | None = None) -> tuple[int, str, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            code = main(list(args))
-        return code, stdout.getvalue(), stderr.getvalue()
+        old_stdin = sys.stdin
+        if stdin is not None:
+            sys.stdin = io.StringIO(stdin)
+        try:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                code = main(list(args))
+            return code, stdout.getvalue(), stderr.getvalue()
+        finally:
+            sys.stdin = old_stdin
 
     def wait_for_path(self, path: Path) -> None:
         deadline = time.monotonic() + 2
@@ -94,9 +100,11 @@ class CliTest(unittest.TestCase):
         code, stdout, stderr = self.run_cli(
             "message",
             "send",
+            "--to",
             "Tom",
             "--cc",
             "Lee",
+            "--body",
             "hello from sarah",
             "--format",
             "json",
@@ -140,6 +148,7 @@ class CliTest(unittest.TestCase):
         code, stdout, stderr = self.run_cli(
             "message",
             "send",
+            "--to",
             "Tom",
             "--to",
             "Lee",
@@ -158,7 +167,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(json.loads(stdout)[0]["preview"], "hello team")
 
         body_file = Path(self.tmp.name) / "body.txt"
-        body_file.write_text("body from file\n", encoding="utf-8")
+        body_text = 'body from file\n$(owl message send Taylor "oops")\n"quoted"\n'
+        body_file.write_text(body_text, encoding="utf-8")
         os.environ["OWL_NAME"] = "Sarah"
         code, stdout, stderr = self.run_cli(
             "message",
@@ -171,7 +181,33 @@ class CliTest(unittest.TestCase):
             "json",
         )
         self.assertEqual(code, 0, stderr)
+        body_message_id = json.loads(stdout)["id"]
         self.assertEqual(json.loads(stdout)["to"], "tom")
+
+        os.environ["OWL_NAME"] = "Tom"
+        code, stdout, stderr = self.run_cli("message", "read", body_message_id, "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["body"], body_text)
+
+        stdin_text = 'body from stdin\n$(owl message send Taylor "oops")\n'
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "--to",
+            "Tom",
+            "--stdin",
+            "--format",
+            "json",
+            stdin=stdin_text,
+        )
+        self.assertEqual(code, 0, stderr)
+        stdin_message_id = json.loads(stdout)["id"]
+
+        os.environ["OWL_NAME"] = "Tom"
+        code, stdout, stderr = self.run_cli("message", "read", stdin_message_id, "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["body"], stdin_text)
 
         code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "--body-file", str(body_file / "missing"))
         self.assertEqual(code, 1)
@@ -179,15 +215,27 @@ class CliTest(unittest.TestCase):
 
         code, _stdout, stderr = self.run_cli("message", "send", "Tom", "accidental", "--body", "real")
         self.assertEqual(code, 1)
-        self.assertIn("positional body cannot be used", stderr)
+        self.assertIn("message send supports either", stderr)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "--to", "Lee")
+        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "hello", "--cc", "Lee")
         self.assertEqual(code, 1)
-        self.assertIn("message requires recipients and a body", stderr)
+        self.assertIn("message send supports either", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "--to", "Lee", "--body", "real")
+        self.assertEqual(code, 1)
+        self.assertIn("message send supports either", stderr)
 
         code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "body without positional recipient")
         self.assertEqual(code, 1)
-        self.assertIn("message requires recipients and a body", stderr)
+        self.assertIn("message send supports either", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "--cc", "Lee", "--body", "cc without primary")
+        self.assertEqual(code, 1)
+        self.assertIn("explicit message form requires at least one --to recipient", stderr)
+
+        code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom")
+        self.assertEqual(code, 1)
+        self.assertIn("explicit message form requires --body", stderr)
 
     def test_commands_piggyback_unread_notification_on_stderr(self) -> None:
         os.environ["OWL_NAME"] = "Tom"

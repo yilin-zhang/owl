@@ -304,19 +304,31 @@ def cmd_spells_cast(args: argparse.Namespace, store: Store) -> int:
 
 
 def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
+    usage = (
+        "message send supports either `owl message send NAME BODY` or "
+        "`owl message send --to NAME [--to NAME ...] [--cc NAME ...] "
+        "(--body TEXT | --body-file PATH | --stdin)`"
+    )
     body_sources = [
         args.body is not None,
         args.body_file is not None,
         args.body_stdin,
     ]
-    if sum(body_sources) > 1:
+    flags_present = bool(args.to or args.cc or any(body_sources))
+    if flags_present and (args.recipient is not None or args.body_arg is not None):
+        raise OwlError(usage)
+    if not flags_present:
+        if args.recipient is None or args.body_arg is None:
+            raise OwlError(usage)
+        return [args.recipient], args.body_arg
+    if not args.to:
+        raise OwlError("explicit message form requires at least one --to recipient")
+    body_source_count = sum(body_sources)
+    if body_source_count > 1:
         raise OwlError("choose only one message body source")
-    if any(body_sources) and args.body_arg is not None:
-        raise OwlError("positional body cannot be used with --body, --body-file, or --stdin")
+    if body_source_count == 0:
+        raise OwlError("explicit message form requires --body, --body-file, or --stdin")
 
-    recipients = []
-    if args.recipient is not None:
-        recipients.append(args.recipient)
     if args.body is not None:
         body = args.body
     elif args.body_file is not None:
@@ -327,12 +339,9 @@ def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
     elif args.body_stdin:
         body = sys.stdin.read()
     else:
-        if args.body_arg is not None:
-            body = args.body_arg
-        else:
-            raise OwlError("message requires recipients and a body")
+        raise OwlError("explicit message form requires --body, --body-file, or --stdin")
 
-    return [*recipients, *args.to], body
+    return args.to, body
 
 
 def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:

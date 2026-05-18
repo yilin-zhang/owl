@@ -49,15 +49,23 @@ owl message inbox --format json
 owl message sent --format json
 ```
 
-Send to a recipient from the current identity:
+Use the shorthand only for a single-recipient, one-line message:
 
 ```bash
 owl message send Tom "Message body"
-owl message send Tom --cc Lee "Message body"
-owl message send Tom --to Lee "Message body"
-owl message send --to Tom --body "Message body"
-owl message send --to Tom --body-file ./note.md
 ```
+
+Use the explicit form for multiple recipients, CC, or non-trivial bodies:
+
+```bash
+owl message send --to Tom --to Lee --body "Message body"
+owl message send --to Tom --cc Lee --body "Message body"
+owl message send --to Tom --body-file ./note.md
+owl message send --to Tom --stdin < ./note.md
+```
+
+Do not mix positional recipients with `--to`, `--cc`, `--body`,
+`--body-file`, or `--stdin`.
 
 Successful non-watch Owl commands print an unread-message reminder to stderr
 when the current identity has pending mail. Data output remains on stdout.

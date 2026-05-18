@@ -17,15 +17,28 @@ owl message read <message-id>
 
 ## Send Mail
 
+Use the shorthand only for a single-recipient, one-line message:
+
 ```bash
 owl message send Tom "Please inspect the failing test."
-owl message send Tom --cc Lee "Please inspect the failing test."
-owl message send Tom --to Lee "Please inspect the failing test."
-owl message send --to Tom --body "Please inspect the failing test."
-owl message send --to Tom --body-file ./review.md
 ```
 
-Use `--to` for additional primary recipients and `--cc` for CC recipients. Do not encode recipient lists inside one name.
+Use the explicit form for multiple recipients, CC, or non-trivial bodies:
+
+```bash
+owl message send --to Tom --to Lee --body "Please inspect the failing test."
+owl message send --to Tom --cc Lee --body "Please inspect the failing test."
+owl message send --to Tom --body-file ./review.md
+owl message send --to Tom --stdin < ./review.md
+```
+
+The two forms are mutually exclusive. Do not combine positional recipients or
+bodies with `--to`, `--cc`, `--body`, `--body-file`, or `--stdin`. Do not encode
+recipient lists inside one name.
+
+Use `--body-file` or `--stdin` for multiline bodies, command examples, quotes,
+or any text containing shell metacharacters. Do not compose those bodies through
+shell command substitution or positional arguments.
 
 Successful non-watch Owl commands print an unread-message reminder to stderr
 when the current identity has pending mail. Data output remains on stdout.
