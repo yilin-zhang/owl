@@ -9,8 +9,8 @@ from .errors import OwlError
 
 def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
     usage = (
-        "message send supports either `owl message send NAME BODY` or "
-        "`owl message send --to NAME [--to NAME ...] [--cc NAME ...] "
+        "messages send supports either `owl messages send NAME BODY` or "
+        "`owl messages send --to NAME [--to NAME ...] [--cc NAME ...] "
         "(--body TEXT | --body-file PATH | --stdin)`"
     )
     body_sources = [

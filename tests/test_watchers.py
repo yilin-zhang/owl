@@ -25,7 +25,7 @@ from tests.helpers import CliRunner
 def test_watch_and_status(cli: CliRunner) -> None:
     os.environ["OWL_NAME"] = "Sarah"
     code, stdout, stderr = cli.run(
-        "message",
+        "messages",
         "watch",
         "--timeout",
         "0.01",
@@ -33,12 +33,12 @@ def test_watch_and_status(cli: CliRunner) -> None:
     assert code == 0, stderr
     assert stdout == ""
 
-    code, stdout, stderr = cli.run("message", "status", "--format", "json")
+    code, stdout, stderr = cli.run("messages", "status", "--format", "json")
     assert code == 0, stderr
     assert json.loads(stdout)[0]["status"] == "online"
 
     code, stdout, stderr = cli.run(
-        "message",
+        "messages",
         "watch",
         "--timeout",
         "0",
@@ -62,7 +62,7 @@ def test_watch_exits_on_message_without_waiting_for_pulse_interval(cli: CliRunne
             sys.executable,
             "-m",
             "owl_cli",
-            "message",
+            "messages",
             "watch",
             "--timeout",
             "5",
@@ -75,7 +75,7 @@ def test_watch_exits_on_message_without_waiting_for_pulse_interval(cli: CliRunne
     )
     cli.wait_for_path(Path(cli.home) / "state" / "agents" / "tom.watch.sock")
     os.environ["OWL_NAME"] = "Sarah"
-    code, _stdout, stderr = cli.run("message", "send", "Tom", "wake up")
+    code, _stdout, stderr = cli.run("messages", "send", "Tom", "wake up")
     assert code == 0, stderr
     stdout, stderr = proc.communicate(timeout=2)
     elapsed = time.monotonic() - started
@@ -99,7 +99,7 @@ def test_watch_pulse_exits_when_notification_is_missed(cli: CliRunner) -> None:
             sys.executable,
             "-m",
             "owl_cli",
-            "message",
+            "messages",
             "watch",
             "--interval",
             "0.1",
@@ -147,7 +147,7 @@ def test_watch_replaces_existing_watcher_for_same_agent(cli: CliRunner) -> None:
             sys.executable,
             "-m",
             "owl_cli",
-            "message",
+            "messages",
             "watch",
             "--timeout",
             "30",
@@ -165,7 +165,7 @@ def test_watch_replaces_existing_watcher_for_same_agent(cli: CliRunner) -> None:
             sys.executable,
             "-m",
             "owl_cli",
-            "message",
+            "messages",
             "watch",
             "--timeout",
             "0.01",

@@ -31,7 +31,7 @@ def test_perch_status_combines_state_messages_and_watch(cli: CliRunner) -> None:
     code, _stdout, stderr = cli.run("whoami")
     assert code == 0, stderr
     os.environ["OWL_NAME"] = "Sarah"
-    code, _stdout, stderr = cli.run("message", "send", "Lee", "hello lee")
+    code, _stdout, stderr = cli.run("messages", "send", "Lee", "hello lee")
     assert code == 0, stderr
 
     memory_path = Path(cli.home) / "memories" / "memory-only.jsonl"
@@ -77,7 +77,7 @@ def test_perch_status_combines_state_messages_and_watch(cli: CliRunner) -> None:
             sys.executable,
             "-m",
             "owl_cli",
-            "message",
+            "messages",
             "watch",
             "--timeout",
             "30",

@@ -16,13 +16,13 @@ When Owl is active for the session, orient before doing delegated work:
 ```bash
 owl whoami --format json
 owl memory show --format json
-owl message inbox --format json
+owl messages inbox --format json
 ```
 
 Read unread messages that are relevant to the current work:
 
 ```bash
-owl message read <message-id>
+owl messages read <message-id>
 ```
 
 ## Identity
@@ -52,23 +52,23 @@ spells.
 Inspect mailbox state:
 
 ```bash
-owl message inbox --format json
-owl message sent --format json
+owl messages inbox --format json
+owl messages sent --format json
 ```
 
 Use the shorthand only for a single-recipient, one-line message:
 
 ```bash
-owl message send Tom "Message body"
+owl messages send Tom "Message body"
 ```
 
 Use the explicit form for multiple recipients, CC, or non-trivial bodies:
 
 ```bash
-owl message send --to Tom --to Lee --body "Message body"
-owl message send --to Tom --cc Lee --body "Message body"
-owl message send --to Tom --body-file ./note.md
-owl message send --to Tom --stdin < ./note.md
+owl messages send --to Tom --to Lee --body "Message body"
+owl messages send --to Tom --cc Lee --body "Message body"
+owl messages send --to Tom --body-file ./note.md
+owl messages send --to Tom --stdin < ./note.md
 ```
 
 Do not mix positional recipients with `--to`, `--cc`, `--body`,
@@ -121,7 +121,7 @@ When an Owl-managed agent finishes useful work and should remain reachable,
 start:
 
 ```bash
-owl message watch --format json
+owl messages watch --format json
 ```
 
 Watch is one-shot: it stays alive until unread mail exists, then exits. It has

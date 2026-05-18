@@ -12,7 +12,7 @@ Owl identity is `OWL_NAME`, defaulting to `Root` when unset.
 ```bash
 export OWL_NAME=Sarah
 owl whoami
-owl message status --format json
+owl messages status --format json
 ```
 
 ## Guidance

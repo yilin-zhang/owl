@@ -10,8 +10,8 @@ Use the mailbox for work requests, handoffs, and durable inter-agent notes.
 ## Read Incoming Mail
 
 ```bash
-owl message inbox --format json
-owl message read <message-id>
+owl messages inbox --format json
+owl messages read <message-id>
 ```
 
 `read` marks the message as read for that recipient.
@@ -21,16 +21,16 @@ owl message read <message-id>
 Use the shorthand only for a single-recipient, one-line message:
 
 ```bash
-owl message send Tom "Please inspect the failing test."
+owl messages send Tom "Please inspect the failing test."
 ```
 
 Use the explicit form for multiple recipients, CC, or non-trivial bodies:
 
 ```bash
-owl message send --to Tom --to Lee --body "Please inspect the failing test."
-owl message send --to Tom --cc Lee --body "Please inspect the failing test."
-owl message send --to Tom --body-file ./review.md
-owl message send --to Tom --stdin < ./review.md
+owl messages send --to Tom --to Lee --body "Please inspect the failing test."
+owl messages send --to Tom --cc Lee --body "Please inspect the failing test."
+owl messages send --to Tom --body-file ./review.md
+owl messages send --to Tom --stdin < ./review.md
 ```
 
 The two forms are mutually exclusive. Do not combine positional recipients or
@@ -47,7 +47,7 @@ when the current identity has pending mail. Data output remains on stdout.
 ## Sent Mail
 
 ```bash
-owl message sent --format json
+owl messages sent --format json
 ```
 
 Sent output includes per-recipient read state. Use JSON when another agent will parse the result.
@@ -55,7 +55,7 @@ Sent output includes per-recipient read state. Use JSON when another agent will 
 ## Watching
 
 ```bash
-owl message watch --format json
+owl messages watch --format json
 ```
 
 Watch waits for mail addressed to the current identity and exits when unread

@@ -97,12 +97,12 @@ owl spells cast owl/perch
 Send messages and read your inbox:
 
 ```bash
-owl message send Tom "Please review the patch"
-owl message send --to Tom --to Lee --body "Please review the patch"
-owl message send --to Tom --body-file ./note.md
-owl message send --to Tom --stdin < ./note.md
-owl message inbox
-owl message read <message-id>
+owl messages send Tom "Please review the patch"
+owl messages send --to Tom --to Lee --body "Please review the patch"
+owl messages send --to Tom --body-file ./note.md
+owl messages send --to Tom --stdin < ./note.md
+owl messages inbox
+owl messages read <message-id>
 ```
 
 Use `--body-file` or `--stdin` for multiline bodies, command examples, quotes,
@@ -114,7 +114,7 @@ the current identity has pending mail. Command data still goes to stdout.
 Watch is a one-shot wait:
 
 ```bash
-owl message watch --format json
+owl messages watch --format json
 ```
 
 It exits when unread mail exists. There is no timeout unless `--timeout` is

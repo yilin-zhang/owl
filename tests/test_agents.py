@@ -13,7 +13,7 @@ def test_owl_name_resolves_default_identity(cli: CliRunner) -> None:
     assert code == 0, stderr
     assert json.loads(stdout)["key"] == "sam"
 
-    code, stdout, stderr = cli.run("message", "send", "Tom", "hello", "--format", "json")
+    code, stdout, stderr = cli.run("messages", "send", "Tom", "hello", "--format", "json")
     assert code == 0, stderr
     assert json.loads(stdout)["from"] == "sam"
 

@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_whoami_parser(subparsers)
     add_memory_parser(subparsers)
-    add_message_parser(subparsers)
+    add_messages_parser(subparsers)
     add_perch_parser(subparsers)
     add_spells_parser(subparsers)
 
@@ -68,10 +68,10 @@ def add_memory_parser(subparsers: Any) -> None:
     memory_compact.set_defaults(func=cmd_memory_compact)
 
 
-def add_message_parser(subparsers: Any) -> None:
-    message = subparsers.add_parser("message", help="Mailbox commands.")
-    message_sub = message.add_subparsers(dest="message_command", required=True)
-    message_send = message_sub.add_parser("send")
+def add_messages_parser(subparsers: Any) -> None:
+    messages = subparsers.add_parser("messages", help="Mailbox commands.")
+    messages_sub = messages.add_subparsers(dest="messages_command", required=True)
+    message_send = messages_sub.add_parser("send")
     message_send.add_argument("recipient", nargs="?")
     message_send.add_argument("body_arg", nargs="?")
     message_send.add_argument("--to", action="append", default=[])
@@ -81,22 +81,22 @@ def add_message_parser(subparsers: Any) -> None:
     message_send.add_argument("--stdin", action="store_true", dest="body_stdin")
     add_format(message_send)
     message_send.set_defaults(func=cmd_message_send)
-    message_inbox = message_sub.add_parser("inbox")
+    message_inbox = messages_sub.add_parser("inbox")
     add_format(message_inbox)
     message_inbox.set_defaults(func=cmd_message_inbox)
-    message_read = message_sub.add_parser("read")
+    message_read = messages_sub.add_parser("read")
     message_read.add_argument("message_id")
     message_read.add_argument("--format", choices=["text", "json"], default="text")
     message_read.set_defaults(func=cmd_message_read)
-    message_sent = message_sub.add_parser("sent")
+    message_sent = messages_sub.add_parser("sent")
     add_format(message_sent)
     message_sent.set_defaults(func=cmd_message_sent)
-    message_watch = message_sub.add_parser("watch")
+    message_watch = messages_sub.add_parser("watch")
     message_watch.add_argument("--timeout", type=float)
     message_watch.add_argument("--interval", type=float, default=DEFAULT_WATCH_INTERVAL_SECONDS)
     message_watch.add_argument("--format", choices=["text", "json"], default="text")
     message_watch.set_defaults(func=cmd_message_watch)
-    message_status = message_sub.add_parser("status")
+    message_status = messages_sub.add_parser("status")
     message_status.add_argument("--threshold", type=int, default=120)
     add_format(message_status)
     message_status.set_defaults(func=cmd_message_status)
@@ -340,7 +340,7 @@ def cmd_spells_install(args: argparse.Namespace, store: Store) -> int:
 
 
 def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:
-    if getattr(args, "command", None) == "message" and getattr(args, "message_command", None) in {
+    if getattr(args, "command", None) == "messages" and getattr(args, "messages_command", None) in {
         "inbox",
         "read",
         "sent",
@@ -354,4 +354,4 @@ def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:
         print(f"owl: message check failed: {exc}", file=sys.stderr)
         return
     if count:
-        print(f"owl: {count} unread message(s). Run `owl message inbox`.", file=sys.stderr)
+        print(f"owl: {count} unread message(s). Run `owl messages inbox`.", file=sys.stderr)

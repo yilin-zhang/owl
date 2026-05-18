@@ -13,7 +13,7 @@ def test_malformed_jsonl_and_state_are_controlled(cli: CliRunner) -> None:
     messages.write_text('"not an object"\n')
 
     os.environ["OWL_NAME"] = "Sarah"
-    code, _stdout, stderr = cli.run("message", "inbox")
+    code, _stdout, stderr = cli.run("messages", "inbox")
     assert code == 1
     assert "expected object" in stderr
 
@@ -21,6 +21,6 @@ def test_malformed_jsonl_and_state_are_controlled(cli: CliRunner) -> None:
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text('{"last_seen_at": "not-a-date"}\n')
 
-    code, stdout, stderr = cli.run("message", "status", "--format", "json")
+    code, stdout, stderr = cli.run("messages", "status", "--format", "json")
     assert code == 0, stderr
     assert json.loads(stdout)[0]["status"] == "unknown"
