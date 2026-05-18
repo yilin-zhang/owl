@@ -4,11 +4,13 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+import owl_spells
+
 from .constants import SOURCE_BUILTIN, SOURCE_CUSTOM
 from .errors import OwlError
 from .store import Store, user_home
 
-BUILTIN_SPELLS = Path(__file__).parent / "builtin_spells"
+BUILTIN_SPELLS = Path(owl_spells.__file__).parent
 
 
 @dataclass(frozen=True)

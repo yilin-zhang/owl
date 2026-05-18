@@ -18,12 +18,11 @@ src/owl_cli/
   spells.py
   store.py
   output.py
-  builtin_spells/
+src/owl_spells/
 tests/
 ```
 
-Keep built-in spell files under `src/owl_cli/builtin_spells`, not beside
-`spells.py`.
+Keep built-in spell files under `src/owl_spells`, not beside `spells.py`.
 
 ## Verify
 

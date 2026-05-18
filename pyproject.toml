@@ -21,7 +21,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-owl_cli = ["builtin_spells/**/SKILL.md"]
+owl_spells = ["**/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -34,7 +34,7 @@ target-version = ["py311"]
 [tool.isort]
 profile = "black"
 line_length = 100
-known_first_party = ["owl_cli"]
+known_first_party = ["owl_cli", "owl_spells"]
 
 [dependency-groups]
 dev = [

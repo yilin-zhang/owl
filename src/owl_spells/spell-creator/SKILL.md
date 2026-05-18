@@ -60,7 +60,7 @@ Locations:
 
 - User reusable spells: `$OWL_HOME/spells/<relative-path>/SKILL.md`
 - Project-local spells: `./.owl/spells/<relative-path>/SKILL.md`
-- Built-in Owl spells: `src/owl_cli/builtin_spells/<relative-path>/SKILL.md`
+- Built-in Owl spells: `src/owl_spells/<relative-path>/SKILL.md`
 
 Project spells override user spells, and user spells override built-ins by
 relative path. Use `OWL_PROJECT_ROOT` when creating a project-local spell from
