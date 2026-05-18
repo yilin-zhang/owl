@@ -1,0 +1,372 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import os
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from owl_cli.cli import main
+
+
+class CliTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_home = os.environ.get("OWL_HOME")
+        self.old_name = os.environ.get("OWL_NAME")
+        os.environ["OWL_HOME"] = self.tmp.name
+        os.environ.pop("OWL_NAME", None)
+
+    def tearDown(self) -> None:
+        if self.old_home is None:
+            os.environ.pop("OWL_HOME", None)
+        else:
+            os.environ["OWL_HOME"] = self.old_home
+        if self.old_name is None:
+            os.environ.pop("OWL_NAME", None)
+        else:
+            os.environ["OWL_NAME"] = self.old_name
+        self.tmp.cleanup()
+
+    def run_cli(self, *args: str) -> tuple[int, str, str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = main(list(args))
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    def wait_for_path(self, path: Path) -> None:
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if path.exists():
+                return
+            time.sleep(0.02)
+        self.fail(f"timed out waiting for {path}")
+
+    def test_owl_name_resolves_default_identity(self) -> None:
+        os.environ["OWL_NAME"] = "Sam"
+        code, stdout, stderr = self.run_cli("whoami", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["key"], "sam")
+
+        code, stdout, stderr = self.run_cli("message", "send", "Tom", "hello", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["from"], "sam")
+
+    def test_missing_owl_name_defaults_to_global_identity(self) -> None:
+        code, stdout, stderr = self.run_cli("whoami", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["key"], "global")
+
+    def test_message_send_inbox_read_sent(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "Tom",
+            "--cc",
+            "Lee",
+            "hello from sarah",
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        message_id = json.loads(stdout)["id"]
+
+        os.environ["OWL_NAME"] = "Tom"
+        code, stdout, stderr = self.run_cli("message", "inbox", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        inbox = json.loads(stdout)
+        self.assertEqual(inbox[0]["id"], message_id)
+        self.assertEqual(inbox[0]["status"], "unread")
+        self.assertEqual(inbox[0]["role"], "to")
+
+        code, stdout, stderr = self.run_cli("message", "read", message_id)
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("hello from sarah", stdout)
+
+        code, _stdout, stderr = self.run_cli("message", "read", message_id)
+        self.assertEqual(code, 0, stderr)
+
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli("message", "sent", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        sent = json.loads(stdout)
+        self.assertEqual(sent[0]["read_by"], "tom")
+        self.assertEqual(sent[0]["unread_by"], "lee")
+
+        events = (Path(self.tmp.name) / "messages" / "messages.jsonl").read_text().splitlines()
+        self.assertEqual(len(events), 2)
+        self.assertEqual(json.loads(events[0])["type"], "message")
+        self.assertEqual(json.loads(events[1])["type"], "read")
+
+        os.environ["OWL_NAME"] = "Lee"
+        code, _stdout, stderr = self.run_cli("message", "read", message_id)
+        self.assertEqual(code, 0, stderr)
+
+    def test_message_defaults_to_global_sender_and_rejects_empty_recipient(self) -> None:
+        code, stdout, stderr = self.run_cli("message", "send", "Tom", "body", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["from"], "global")
+
+        os.environ["OWL_NAME"] = "Sarah"
+        code, _stdout, stderr = self.run_cli("message", "send", "", "body")
+        self.assertEqual(code, 1)
+        self.assertIn("recipient", stderr)
+
+    def test_message_primary_recipient_is_not_comma_split(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "Tom,Lee",
+            "body",
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["to"], "tom-lee")
+
+        os.environ["OWL_NAME"] = "Tom"
+        code, stdout, stderr = self.run_cli("message", "inbox", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout), [])
+
+        os.environ["OWL_NAME"] = "Tom,Lee"
+        code, stdout, stderr = self.run_cli("message", "inbox", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(len(json.loads(stdout)), 1)
+
+    def test_unauthorized_message_read_is_rejected(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "send",
+            "Tom",
+            "secret",
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        message_id = json.loads(stdout)["id"]
+
+        os.environ["OWL_NAME"] = "Lee"
+        code, _stdout, stderr = self.run_cli("message", "read", message_id)
+        self.assertEqual(code, 1)
+        self.assertIn("not addressed", stderr)
+
+    def test_memory_compact_is_append_only_effective_state(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        self.assertEqual(self.run_cli("memory", "write", "old")[0], 0)
+        self.assertEqual(self.run_cli("memory", "compact", "summary")[0], 0)
+        self.assertEqual(self.run_cli("memory", "write", "new")[0], 0)
+
+        code, stdout, stderr = self.run_cli("memory", "show")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stdout.strip().splitlines(), ["summary", "new"])
+
+        events = (Path(self.tmp.name) / "memories" / "sarah.jsonl").read_text().splitlines()
+        self.assertEqual([json.loads(line)["type"] for line in events], ["memory", "compact", "memory"])
+
+    def test_memory_visibility_includes_global_scope(self) -> None:
+        self.assertEqual(self.run_cli("memory", "write", "global-old")[0], 0)
+        self.assertEqual(self.run_cli("memory", "compact", "global-summary")[0], 0)
+        self.assertEqual(self.run_cli("memory", "write", "global-new")[0], 0)
+
+        os.environ["OWL_NAME"] = "Sarah"
+        self.assertEqual(self.run_cli("memory", "write", "sarah-old")[0], 0)
+        self.assertEqual(self.run_cli("memory", "compact", "sarah-summary")[0], 0)
+        self.assertEqual(self.run_cli("memory", "write", "sarah-new")[0], 0)
+
+        os.environ["OWL_NAME"] = "Tom"
+        self.assertEqual(self.run_cli("memory", "write", "tom-note")[0], 0)
+
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli("memory", "show", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        sarah_memory = json.loads(stdout)
+        self.assertEqual(
+            [event["text"] for event in sarah_memory["effective"]],
+            ["global-summary", "global-new", "sarah-summary", "sarah-new"],
+        )
+        self.assertEqual({event["agent"] for event in sarah_memory["events"]}, {"global", "sarah"})
+
+        os.environ.pop("OWL_NAME", None)
+        code, stdout, stderr = self.run_cli("memory", "show", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        global_memory = json.loads(stdout)
+        self.assertEqual(global_memory["agent"], "global")
+        self.assertEqual(
+            {event["text"] for event in global_memory["effective"]},
+            {"global-summary", "global-new", "sarah-summary", "sarah-new", "tom-note"},
+        )
+
+    def test_custom_spell_overrides_builtin(self) -> None:
+        custom = Path(self.tmp.name) / "spells" / "SKILL.md"
+        custom.parent.mkdir(parents=True)
+        custom.write_text("---\ndescription: Custom owl spell.\n---\n\n# Owl\n\nCustom content.\n")
+
+        code, stdout, stderr = self.run_cli("spells", "list", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        rows = json.loads(stdout)
+        root = next(row for row in rows if row["path"] == "")
+        self.assertEqual(root["source"], "custom")
+        self.assertEqual(root["description"], "Custom owl spell.")
+
+        code, stdout, stderr = self.run_cli("spells", "cast", "")
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Custom content.", stdout)
+
+    def test_watch_and_status(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "watch",
+            "--timeout",
+            "0.01",
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stdout, "")
+
+        code, stdout, stderr = self.run_cli("message", "status", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        status = json.loads(stdout)[0]
+        self.assertEqual(status["status"], "online")
+
+        code, stdout, stderr = self.run_cli(
+            "message",
+            "watch",
+            "--timeout",
+            "0",
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stdout, "")
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
+    def test_watch_exits_on_message_without_waiting_for_pulse_interval(self) -> None:
+        env = os.environ.copy()
+        env["OWL_HOME"] = self.tmp.name
+        env["OWL_NAME"] = "Tom"
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+        started = time.monotonic()
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "owl_cli",
+                "message",
+                "watch",
+                "--timeout",
+                "5",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.wait_for_path(Path(self.tmp.name) / "state" / "agents" / "tom.watch.sock")
+        os.environ["OWL_NAME"] = "Sarah"
+        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "wake up")
+        self.assertEqual(code, 0, stderr)
+        stdout, stderr = proc.communicate(timeout=2)
+        elapsed = time.monotonic() - started
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("1 unread message", stderr)
+        self.assertLess(elapsed, 2.5)
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
+    def test_watch_replaces_existing_watcher_for_same_agent(self) -> None:
+        env = os.environ.copy()
+        env["OWL_HOME"] = self.tmp.name
+        env["OWL_NAME"] = "Tom"
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+        first = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "owl_cli",
+                "message",
+                "watch",
+                "--timeout",
+                "30",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.wait_for_path(Path(self.tmp.name) / "state" / "agents" / "tom.watch.sock")
+
+        second = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "owl_cli",
+                "message",
+                "watch",
+                "--timeout",
+                "0.01",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        second_stdout, second_stderr = second.communicate(timeout=2)
+        self.assertEqual(second.returncode, 0, second_stderr)
+        self.assertEqual(second_stdout, "")
+
+        first_stdout, first_stderr = first.communicate(timeout=2)
+        self.assertEqual(first_stdout, "")
+        self.assertEqual(first_stderr, "")
+        self.assertEqual(first.returncode, -signal.SIGTERM)
+
+    def test_whoami_without_owl_name_touches_global_state(self) -> None:
+        code, stdout, stderr = self.run_cli("whoami", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["key"], "global")
+        self.assertTrue((Path(self.tmp.name) / "state" / "agents" / "global.json").exists())
+
+    def test_malformed_jsonl_and_state_are_controlled(self) -> None:
+        messages = Path(self.tmp.name) / "messages" / "messages.jsonl"
+        messages.parent.mkdir(parents=True)
+        messages.write_text('"not an object"\n')
+
+        os.environ["OWL_NAME"] = "Sarah"
+        code, _stdout, stderr = self.run_cli("message", "inbox")
+        self.assertEqual(code, 1)
+        self.assertIn("expected object", stderr)
+
+        state = Path(self.tmp.name) / "state" / "agents" / "sarah.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text('{"last_seen_at": "not-a-date"}\n')
+
+        code, stdout, stderr = self.run_cli("message", "status", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)[0]["status"], "unknown")
+
+    def test_malformed_spell_frontmatter_does_not_crash(self) -> None:
+        custom = Path(self.tmp.name) / "spells" / "broken" / "SKILL.md"
+        custom.parent.mkdir(parents=True)
+        custom.write_text("---\ndescription: Broken\n# Broken\n\nBody.\n")
+
+        code, stdout, stderr = self.run_cli("spells", "list", "broken", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout)[0]["path"], "broken")
+
+
+if __name__ == "__main__":
+    unittest.main()

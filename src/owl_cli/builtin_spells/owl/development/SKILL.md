@@ -1,0 +1,36 @@
+---
+description: Work on Owl's Python CLI implementation, tests, package layout, and uv-based verification.
+---
+
+# Owl Development
+
+Use this spell when editing Owl itself.
+
+## Project Shape
+
+```text
+src/owl_cli/
+  cli.py
+  agents.py
+  messages.py
+  memory.py
+  spells.py
+  store.py
+  output.py
+  builtin_spells/
+tests/
+```
+
+Keep built-in spell files under `src/owl_cli/builtin_spells`, not beside
+`spells.py`.
+
+## Verify
+
+```bash
+uv run python -m unittest discover -s tests
+uv run python -m compileall src tests
+uvx mypy src tests
+uv run owl spells list owl --all --format json
+```
+
+Use `OWL_HOME` to isolate manual CLI tests.
