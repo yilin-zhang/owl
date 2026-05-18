@@ -43,14 +43,28 @@ memory intentionally.
 ## Opt-In Agent Skill
 
 Owl does not have to be forced into every agent session. When an agent should
-coordinate through Owl, give it the built-in Owl skill:
+coordinate through Owl, register the built-in Owl skill with that agent app.
+
+For Codex, write the skill into the Codex skills directory:
 
 ```bash
-owl spells cast owl
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/owl"
+owl spells cast owl > "${CODEX_HOME:-$HOME/.codex}/skills/owl/SKILL.md"
 ```
 
-The skill carries the operating instructions for identity, mail, memory, perch,
-and watching. To inspect the focused sub-skills:
+Then start a new agent session with an Owl identity:
+
+```bash
+OWL_NAME=Sarah codex
+```
+
+For another agent app, use the same idea: save `owl spells cast owl` as
+`SKILL.md` in that app's skills or custom-instructions directory, then reload or
+start a new session so the app discovers it.
+
+`owl spells cast owl` only prints the skill file; it does not register the skill
+by itself. The registered skill carries the operating instructions for identity,
+mail, memory, perch, and watching. To inspect the focused sub-skills:
 
 ```bash
 owl spells list owl --all
