@@ -1,8 +1,8 @@
 """Compatibility re-exports for the pre-split Owl core module."""
 
 from .agents import (
-    AgentRef,
     GLOBAL_AGENT_NAME,
+    AgentRef,
     list_states,
     load_state,
     make_ref,
@@ -46,8 +46,8 @@ from .messages import (
     read_message,
     send_message,
     sent_rows,
-    summarize_messages,
     stop_process,
+    summarize_messages,
     unlink_if_exists,
     unread_count,
     watch_socket_path,
@@ -60,16 +60,17 @@ from .perch import (
     agent_inventory,
     perch_rows,
     summarize_agent_messages,
-    watcher_command,
     watch_registration,
     watch_registration_keys,
     watch_started_at,
     watch_status,
+    watcher_command,
     watcher_pid,
 )
 from .spells import (
     all_spells,
     cast_spell,
+    claude_code_skill_path,
     codex_skill_path,
     collect_spells_from_path,
     extract_description,
@@ -77,6 +78,8 @@ from .spells import (
     install_spell,
     load_builtin_spells,
     normalize_spell_path,
+    resolve_spell_file,
+    skill_install_path,
     spell_file_path,
 )
 from .store import Store, json_line, json_text, parse_jsonl_line
@@ -110,6 +113,7 @@ __all__ = [
     "append_memory",
     "append_message_event",
     "cast_spell",
+    "claude_code_skill_path",
     "codex_skill_path",
     "collect_spells_from_path",
     "die",
@@ -137,9 +141,11 @@ __all__ = [
     "preview",
     "process_alive",
     "read_message",
+    "resolve_spell_file",
     "resolve_name",
     "send_message",
     "sent_rows",
+    "skill_install_path",
     "spell_file_path",
     "status_for_state",
     "stop_process",

@@ -16,6 +16,7 @@ from .errors import OwlError
 from .store import Store
 from .utils import preview, utc_now
 
+
 def message_events(store: Store) -> list[dict[str, Any]]:
     with store.lock("messages"):
         return store.read_jsonl(store.messages_path)
@@ -55,7 +56,9 @@ def send_message(
     return event
 
 
-def summarize_messages(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], set[tuple[str, str]]]:
+def summarize_messages(
+    events: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], set[tuple[str, str]]]:
     messages = [event for event in events if event.get("type") == EVENT_MESSAGE]
     reads: set[tuple[str, str]] = set()
     for event in events:
@@ -160,9 +163,8 @@ def unread_count(store: Store, ref: AgentRef) -> int:
         reads: set[str] = set()
         for event in store.read_jsonl(store.messages_path):
             event_type = event.get("type")
-            if (
-                event_type == EVENT_MESSAGE
-                and (ref.key in event.get("to", []) or ref.key in event.get("cc", []))
+            if event_type == EVENT_MESSAGE and (
+                ref.key in event.get("to", []) or ref.key in event.get("cc", [])
             ):
                 message_id = event.get("id")
                 if isinstance(message_id, str):

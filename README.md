@@ -1,4 +1,4 @@
-# Owl
+# Owl 🦉
 
 `owl` is a local-first CLI for agent identity, mailbox, memory, and spell
 discovery. It is designed as the durable data layer for later agent
@@ -45,24 +45,30 @@ memory intentionally.
 Owl does not have to be forced into every agent session. When an agent should
 coordinate through Owl, register the built-in Owl skill with that agent app.
 
-For Codex, write the skill into the Codex skills directory:
+For Codex, install the skill into the Codex skills directory:
 
 ```bash
 owl spells install owl
 ```
 
-This writes `${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md`. `CODEX_HOME` is
-optional.
+This creates or refreshes a symlink at
+`${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md`. `CODEX_HOME` is optional.
+
+For Claude Code:
+
+```bash
+owl spells install owl --app claude-code
+```
+
+This creates or refreshes a symlink at
+`${CLAUDE_CONFIG_DIR:-~/.claude}/skills/owl/SKILL.md`.
 
 Then start a new agent session with an Owl identity:
 
 ```bash
 OWL_NAME=Sarah codex
+OWL_NAME=Taylor claude
 ```
-
-For another agent app, use the same idea: save `owl spells cast owl` as
-`SKILL.md` in that app's skills or custom-instructions directory, then reload or
-start a new session so the app discovers it.
 
 `owl spells cast owl` only prints the skill file. The registered skill carries
 the operating instructions for identity, mail, memory, perch, and watching. To
@@ -140,7 +146,13 @@ Custom spells go under `$OWL_HOME/spells`.
 ```bash
 uv lock
 owl --help
+uv run isort src tests
+uv run black src tests
 uv run pytest
 uv run python -m compileall src tests
 uvx mypy src tests
 ```
+
+## License
+
+MIT

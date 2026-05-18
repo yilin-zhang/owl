@@ -29,10 +29,12 @@ class CliTest(unittest.TestCase):
         self.old_home = os.environ.get("OWL_HOME")
         self.old_name = os.environ.get("OWL_NAME")
         self.old_codex_home = os.environ.get("CODEX_HOME")
+        self.old_claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
         self.old_user_home = os.environ.get("HOME")
         os.environ["OWL_HOME"] = self.tmp.name
         os.environ.pop("OWL_NAME", None)
         os.environ.pop("CODEX_HOME", None)
+        os.environ.pop("CLAUDE_CONFIG_DIR", None)
 
     def tearDown(self) -> None:
         if self.old_home is None:
@@ -47,6 +49,10 @@ class CliTest(unittest.TestCase):
             os.environ.pop("CODEX_HOME", None)
         else:
             os.environ["CODEX_HOME"] = self.old_codex_home
+        if self.old_claude_config_dir is None:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else:
+            os.environ["CLAUDE_CONFIG_DIR"] = self.old_claude_config_dir
         if self.old_user_home is None:
             os.environ.pop("HOME", None)
         else:
@@ -220,11 +226,15 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(json.loads(stdout)["body"], stdin_text)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "--body-file", str(body_file / "missing"))
+        code, _stdout, stderr = self.run_cli(
+            "message", "send", "--to", "Tom", "--body-file", str(body_file / "missing")
+        )
         self.assertEqual(code, 1)
         self.assertIn("failed to read message body file", stderr)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "accidental", "--body", "real")
+        code, _stdout, stderr = self.run_cli(
+            "message", "send", "Tom", "accidental", "--body", "real"
+        )
         self.assertEqual(code, 1)
         self.assertIn("message send supports either", stderr)
 
@@ -232,15 +242,21 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("message send supports either", stderr)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "Tom", "--to", "Lee", "--body", "real")
+        code, _stdout, stderr = self.run_cli(
+            "message", "send", "Tom", "--to", "Lee", "--body", "real"
+        )
         self.assertEqual(code, 1)
         self.assertIn("message send supports either", stderr)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "--to", "Tom", "body without positional recipient")
+        code, _stdout, stderr = self.run_cli(
+            "message", "send", "--to", "Tom", "body without positional recipient"
+        )
         self.assertEqual(code, 1)
         self.assertIn("message send supports either", stderr)
 
-        code, _stdout, stderr = self.run_cli("message", "send", "--cc", "Lee", "--body", "cc without primary")
+        code, _stdout, stderr = self.run_cli(
+            "message", "send", "--cc", "Lee", "--body", "cc without primary"
+        )
         self.assertEqual(code, 1)
         self.assertIn("explicit message form requires at least one --to recipient", stderr)
 
@@ -321,7 +337,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(stdout.strip().splitlines(), ["summary", "new"])
 
         events = (Path(self.tmp.name) / "memories" / "sarah.jsonl").read_text().splitlines()
-        self.assertEqual([json.loads(line)["type"] for line in events], ["memory", "compact", "memory"])
+        self.assertEqual(
+            [json.loads(line)["type"] for line in events], ["memory", "compact", "memory"]
+        )
 
     def test_memory_visibility_includes_global_scope(self) -> None:
         self.assertEqual(self.run_cli("memory", "write", "global-old")[0], 0)
@@ -381,11 +399,14 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         destination = Path(self.tmp.name) / "codex" / "skills" / "owl" / "SKILL.md"
         self.assertEqual(json.loads(stdout), {"path": "owl", "installed_to": str(destination)})
+        self.assertTrue(destination.is_symlink())
         self.assertEqual(destination.read_text(encoding="utf-8") + "\n", cast_stdout)
 
+        destination.unlink()
         destination.write_text("stale\n", encoding="utf-8")
         code, _stdout, stderr = self.run_cli("spells", "install", "owl")
         self.assertEqual(code, 0, stderr)
+        self.assertTrue(destination.is_symlink())
         self.assertEqual(destination.read_text(encoding="utf-8") + "\n", cast_stdout)
 
         custom = Path(self.tmp.name) / "spells" / "owl" / "SKILL.md"
@@ -395,6 +416,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         code, _stdout, stderr = self.run_cli("spells", "install", "owl")
         self.assertEqual(code, 0, stderr)
+        self.assertTrue(destination.is_symlink())
+        self.assertEqual(destination.resolve(), custom.resolve())
         self.assertEqual(destination.read_text(encoding="utf-8") + "\n", custom_cast_stdout)
 
     def test_spells_install_uses_default_codex_home(self) -> None:
@@ -403,7 +426,27 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         destination = Path(self.tmp.name) / "home" / ".codex" / "skills" / "owl" / "SKILL.md"
         self.assertEqual(json.loads(stdout), {"path": "owl", "installed_to": str(destination)})
-        self.assertTrue(destination.exists())
+        self.assertTrue(destination.is_symlink())
+
+    def test_spells_install_writes_claude_code_skill(self) -> None:
+        os.environ["CLAUDE_CONFIG_DIR"] = str(Path(self.tmp.name) / "claude")
+        code, cast_stdout, stderr = self.run_cli("spells", "cast", "owl")
+        self.assertEqual(code, 0, stderr)
+
+        code, stdout, stderr = self.run_cli(
+            "spells",
+            "install",
+            "owl",
+            "--app",
+            "claude-code",
+            "--format",
+            "json",
+        )
+        self.assertEqual(code, 0, stderr)
+        destination = Path(self.tmp.name) / "claude" / "skills" / "owl" / "SKILL.md"
+        self.assertEqual(json.loads(stdout), {"path": "owl", "installed_to": str(destination)})
+        self.assertTrue(destination.is_symlink())
+        self.assertEqual(destination.read_text(encoding="utf-8") + "\n", cast_stdout)
 
     def test_spells_install_unknown_path_is_rejected(self) -> None:
         code, _stdout, stderr = self.run_cli("spells", "install", "missing")

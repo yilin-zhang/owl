@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from .agents import AgentRef, GLOBAL_AGENT_NAME, make_ref, touch_state
+from .agents import GLOBAL_AGENT_NAME, AgentRef, make_ref, touch_state
 from .constants import EVENT_COMPACT, EVENT_MEMORY
 from .errors import OwlError
 from .store import Store
@@ -62,8 +62,4 @@ def effective_memory(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for index, event in enumerate(events):
         if event.get("type") == EVENT_COMPACT:
             start = index
-    return [
-        event
-        for event in events[start:]
-        if event.get("type") in {EVENT_MEMORY, EVENT_COMPACT}
-    ]
+    return [event for event in events[start:] if event.get("type") in {EVENT_MEMORY, EVENT_COMPACT}]

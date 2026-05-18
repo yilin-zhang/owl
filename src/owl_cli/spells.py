@@ -63,7 +63,9 @@ def all_spells(store: Store) -> dict[str, dict[str, str]]:
     return spells
 
 
-def filter_spells(spells: dict[str, dict[str, str]], path: str | None, include_all: bool) -> list[dict[str, str]]:
+def filter_spells(
+    spells: dict[str, dict[str, str]], path: str | None, include_all: bool
+) -> list[dict[str, str]]:
     prefix = normalize_spell_path(path)
     rows: list[dict[str, str]] = []
     for key, spell in spells.items():
@@ -91,6 +93,10 @@ def normalize_spell_path(path: str | None) -> str | None:
 
 
 def cast_spell(store: Store, path: str) -> str:
+    return resolve_spell_file(store, path).read_text(encoding="utf-8")
+
+
+def resolve_spell_file(store: Store, path: str) -> Path:
     key = normalize_spell_path(path)
     spell_path = spell_file_path(BUILTIN_SPELLS, key)
     custom_path = spell_file_path(store.home / "spells", key)
@@ -98,19 +104,31 @@ def cast_spell(store: Store, path: str) -> str:
         spell_path = custom_path
     if not spell_path.exists():
         raise OwlError(f"unknown spell path: {path}")
-    return spell_path.read_text(encoding="utf-8")
+    return spell_path
 
 
-def install_spell(store: Store, path: str) -> Path:
+def install_spell(store: Store, path: str, app: str = "codex") -> Path:
     key = normalize_spell_path(path)
-    content = cast_spell(store, path)
-    destination = codex_skill_path(key)
+    source = resolve_spell_file(store, path)
+    destination = skill_install_path(app, key)
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content, encoding="utf-8")
+        try:
+            destination.unlink()
+        except FileNotFoundError:
+            pass
+        destination.symlink_to(source.resolve())
     except OSError as exc:
         raise OwlError(f"failed to install spell: {exc}") from exc
     return destination
+
+
+def skill_install_path(app: str, key: str | None) -> Path:
+    if app == "codex":
+        return codex_skill_path(key)
+    if app == "claude-code":
+        return claude_code_skill_path(key)
+    raise OwlError(f"unknown app: {app}")
 
 
 def codex_skill_path(key: str | None) -> Path:
@@ -118,6 +136,13 @@ def codex_skill_path(key: str | None) -> Path:
     if not key:
         return codex_home / "skills" / "SKILL.md"
     return codex_home / "skills" / key / "SKILL.md"
+
+
+def claude_code_skill_path(key: str | None) -> Path:
+    claude_home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
+    if not key:
+        return claude_home / "skills" / "SKILL.md"
+    return claude_home / "skills" / key / "SKILL.md"
 
 
 def spell_file_path(root: Path, key: str | None) -> Path:

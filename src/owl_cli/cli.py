@@ -10,7 +10,15 @@ from .agents import list_states, resolve_name, status_for_state, touch_state
 from .constants import DEFAULT_WATCH_INTERVAL_SECONDS
 from .errors import OwlError, die
 from .memory import append_memory, visible_effective_memory, visible_memory_events
-from .messages import MailboxWatcher, WatchRegistration, inbox_rows, read_message, send_message, sent_rows, unread_count
+from .messages import (
+    MailboxWatcher,
+    WatchRegistration,
+    inbox_rows,
+    read_message,
+    send_message,
+    sent_rows,
+    unread_count,
+)
 from .output import format_text_message, write_json, write_tsv
 from .perch import perch_rows
 from .spells import all_spells, cast_spell, filter_spells, install_spell, normalize_spell_path
@@ -103,8 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
     spells_cast = spells_sub.add_parser("cast")
     spells_cast.add_argument("path")
     spells_cast.set_defaults(func=cmd_spells_cast)
-    spells_install = spells_sub.add_parser("install", help="Install one spell as a Codex skill.")
+    spells_install = spells_sub.add_parser(
+        "install", help="Install one spell as an agent-app skill."
+    )
     spells_install.add_argument("path")
+    spells_install.add_argument("--app", choices=["codex", "claude-code"], default="codex")
     add_format(spells_install)
     spells_install.set_defaults(func=cmd_spells_install)
 
@@ -199,7 +210,9 @@ def cmd_message_sent(args: argparse.Namespace, store: Store) -> int:
     ref = resolve_name()
     rows = sent_rows(store, ref)
     touch_state(store, ref)
-    output_rows(rows, ["id", "to", "cc", "created_at", "read_by", "unread_by", "preview"], args.format)
+    output_rows(
+        rows, ["id", "to", "cc", "created_at", "read_by", "unread_by", "preview"], args.format
+    )
     return 0
 
 
@@ -308,7 +321,7 @@ def cmd_spells_cast(args: argparse.Namespace, store: Store) -> int:
 
 
 def cmd_spells_install(args: argparse.Namespace, store: Store) -> int:
-    destination = install_spell(store, args.path)
+    destination = install_spell(store, args.path, args.app)
     output_one(
         {"path": normalize_spell_path(args.path) or "", "installed_to": str(destination)},
         ["path", "installed_to"],
@@ -359,7 +372,10 @@ def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
 
 
 def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:
-    if getattr(args, "command", None) == "message" and getattr(args, "message_command", None) == "watch":
+    if (
+        getattr(args, "command", None) == "message"
+        and getattr(args, "message_command", None) == "watch"
+    ):
         return
     try:
         ref = resolve_name()

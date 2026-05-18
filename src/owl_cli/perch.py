@@ -82,11 +82,15 @@ def summarize_agent_messages(store: Store) -> dict[str, dict[str, Any]]:
         sender = string_value(message.get("from"))
         if sender:
             summary = agent_message_summary(summaries, sender)
-            summary["latest_outbound_at"] = latest_time(summary.get("latest_outbound_at", ""), created_at)
+            summary["latest_outbound_at"] = latest_time(
+                summary.get("latest_outbound_at", ""), created_at
+            )
         recipients = message_recipients(message)
         for recipient in recipients:
             summary = agent_message_summary(summaries, recipient)
-            summary["latest_inbound_at"] = latest_time(summary.get("latest_inbound_at", ""), created_at)
+            summary["latest_inbound_at"] = latest_time(
+                summary.get("latest_inbound_at", ""), created_at
+            )
             if isinstance(message_id, str) and (message_id, recipient) not in reads:
                 summary["unread"] = int(summary.get("unread", 0)) + 1
                 if created_at >= string_value(summary.get("newest_unread_at")):

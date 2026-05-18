@@ -27,8 +27,19 @@ owl spells cast owl/messages
 owl spells install owl
 ```
 
-This writes `${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md` for Codex. It
-installs one `SKILL.md`, not a recursive spell tree.
+This creates or refreshes a symlink at
+`${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md` for Codex.
+
+For Claude Code:
+
+```bash
+owl spells install owl --app claude-code
+```
+
+This creates or refreshes a symlink at
+`${CLAUDE_CONFIG_DIR:-~/.claude}/skills/owl/SKILL.md`.
+
+Install handles one `SKILL.md`, not a recursive spell tree.
 
 ## Custom Spells
 
