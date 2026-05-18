@@ -28,8 +28,11 @@ class CliTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.old_home = os.environ.get("OWL_HOME")
         self.old_name = os.environ.get("OWL_NAME")
+        self.old_codex_home = os.environ.get("CODEX_HOME")
+        self.old_user_home = os.environ.get("HOME")
         os.environ["OWL_HOME"] = self.tmp.name
         os.environ.pop("OWL_NAME", None)
+        os.environ.pop("CODEX_HOME", None)
 
     def tearDown(self) -> None:
         if self.old_home is None:
@@ -40,6 +43,14 @@ class CliTest(unittest.TestCase):
             os.environ.pop("OWL_NAME", None)
         else:
             os.environ["OWL_NAME"] = self.old_name
+        if self.old_codex_home is None:
+            os.environ.pop("CODEX_HOME", None)
+        else:
+            os.environ["CODEX_HOME"] = self.old_codex_home
+        if self.old_user_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self.old_user_home
         self.tmp.cleanup()
 
     def run_cli(self, *args: str, stdin: str | None = None) -> tuple[int, str, str]:
@@ -360,6 +371,44 @@ class CliTest(unittest.TestCase):
         code, stdout, stderr = self.run_cli("spells", "cast", "")
         self.assertEqual(code, 0, stderr)
         self.assertIn("Custom content.", stdout)
+
+    def test_spells_install_writes_codex_skill(self) -> None:
+        os.environ["CODEX_HOME"] = str(Path(self.tmp.name) / "codex")
+        code, cast_stdout, stderr = self.run_cli("spells", "cast", "owl")
+        self.assertEqual(code, 0, stderr)
+
+        code, stdout, stderr = self.run_cli("spells", "install", "owl", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        destination = Path(self.tmp.name) / "codex" / "skills" / "owl" / "SKILL.md"
+        self.assertEqual(json.loads(stdout), {"path": "owl", "installed_to": str(destination)})
+        self.assertEqual(destination.read_text(encoding="utf-8") + "\n", cast_stdout)
+
+        destination.write_text("stale\n", encoding="utf-8")
+        code, _stdout, stderr = self.run_cli("spells", "install", "owl")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(destination.read_text(encoding="utf-8") + "\n", cast_stdout)
+
+        custom = Path(self.tmp.name) / "spells" / "owl" / "SKILL.md"
+        custom.parent.mkdir(parents=True)
+        custom.write_text("---\ndescription: Custom owl.\n---\n\n# Custom Owl\n", encoding="utf-8")
+        code, custom_cast_stdout, stderr = self.run_cli("spells", "cast", "owl")
+        self.assertEqual(code, 0, stderr)
+        code, _stdout, stderr = self.run_cli("spells", "install", "owl")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(destination.read_text(encoding="utf-8") + "\n", custom_cast_stdout)
+
+    def test_spells_install_uses_default_codex_home(self) -> None:
+        os.environ["HOME"] = str(Path(self.tmp.name) / "home")
+        code, stdout, stderr = self.run_cli("spells", "install", "owl", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        destination = Path(self.tmp.name) / "home" / ".codex" / "skills" / "owl" / "SKILL.md"
+        self.assertEqual(json.loads(stdout), {"path": "owl", "installed_to": str(destination)})
+        self.assertTrue(destination.exists())
+
+    def test_spells_install_unknown_path_is_rejected(self) -> None:
+        code, _stdout, stderr = self.run_cli("spells", "install", "missing")
+        self.assertEqual(code, 1)
+        self.assertIn("unknown spell path: missing", stderr)
 
     def test_watch_and_status(self) -> None:
         os.environ["OWL_NAME"] = "Sarah"

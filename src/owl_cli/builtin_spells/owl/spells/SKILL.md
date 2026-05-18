@@ -21,6 +21,15 @@ owl spells list owl/messages --format json
 owl spells cast owl/messages
 ```
 
+## Install
+
+```bash
+owl spells install owl
+```
+
+This writes `${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md` for Codex. It
+installs one `SKILL.md`, not a recursive spell tree.
+
 ## Custom Spells
 
 Custom spells live under:

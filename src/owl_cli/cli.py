@@ -13,7 +13,7 @@ from .memory import append_memory, visible_effective_memory, visible_memory_even
 from .messages import MailboxWatcher, WatchRegistration, inbox_rows, read_message, send_message, sent_rows, unread_count
 from .output import format_text_message, write_json, write_tsv
 from .perch import perch_rows
-from .spells import all_spells, cast_spell, filter_spells
+from .spells import all_spells, cast_spell, filter_spells, install_spell, normalize_spell_path
 from .store import Store, json_line
 
 
@@ -103,6 +103,10 @@ def build_parser() -> argparse.ArgumentParser:
     spells_cast = spells_sub.add_parser("cast")
     spells_cast.add_argument("path")
     spells_cast.set_defaults(func=cmd_spells_cast)
+    spells_install = spells_sub.add_parser("install", help="Install one spell as a Codex skill.")
+    spells_install.add_argument("path")
+    add_format(spells_install)
+    spells_install.set_defaults(func=cmd_spells_install)
 
     return parser
 
@@ -300,6 +304,16 @@ def cmd_spells_list(args: argparse.Namespace, store: Store) -> int:
 
 def cmd_spells_cast(args: argparse.Namespace, store: Store) -> int:
     print(cast_spell(store, args.path))
+    return 0
+
+
+def cmd_spells_install(args: argparse.Namespace, store: Store) -> int:
+    destination = install_spell(store, args.path)
+    output_one(
+        {"path": normalize_spell_path(args.path) or "", "installed_to": str(destination)},
+        ["path", "installed_to"],
+        args.format,
+    )
     return 0
 
 

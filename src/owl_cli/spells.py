@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .constants import SOURCE_BUILTIN, SOURCE_CUSTOM
@@ -98,6 +99,25 @@ def cast_spell(store: Store, path: str) -> str:
     if not spell_path.exists():
         raise OwlError(f"unknown spell path: {path}")
     return spell_path.read_text(encoding="utf-8")
+
+
+def install_spell(store: Store, path: str) -> Path:
+    key = normalize_spell_path(path)
+    content = cast_spell(store, path)
+    destination = codex_skill_path(key)
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        raise OwlError(f"failed to install spell: {exc}") from exc
+    return destination
+
+
+def codex_skill_path(key: str | None) -> Path:
+    codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
+    if not key:
+        return codex_home / "skills" / "SKILL.md"
+    return codex_home / "skills" / key / "SKILL.md"
 
 
 def spell_file_path(root: Path, key: str | None) -> Path:
