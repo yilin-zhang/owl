@@ -52,7 +52,8 @@ def test_watch_and_status(cli: CliRunner) -> None:
 )
 def test_watch_exits_on_message_without_waiting_for_pulse_interval(cli: CliRunner) -> None:
     env = os.environ.copy()
-    env["OWL_HOME"] = str(cli.home)
+    env["OWL_HOME"] = str(cli.user_home)
+    env["OWL_PROJECT_ROOT"] = str(cli.project_root)
     env["OWL_NAME"] = "Tom"
     env["PYTHONPATH"] = str(cli.repo_root / "src")
     started = time.monotonic()
@@ -89,7 +90,8 @@ def test_watch_exits_on_message_without_waiting_for_pulse_interval(cli: CliRunne
 )
 def test_watch_pulse_exits_when_notification_is_missed(cli: CliRunner) -> None:
     env = os.environ.copy()
-    env["OWL_HOME"] = str(cli.home)
+    env["OWL_HOME"] = str(cli.user_home)
+    env["OWL_PROJECT_ROOT"] = str(cli.project_root)
     env["OWL_NAME"] = "Tom"
     env["PYTHONPATH"] = str(cli.repo_root / "src")
     proc = subprocess.Popen(
@@ -136,7 +138,8 @@ def test_watch_pulse_exits_when_notification_is_missed(cli: CliRunner) -> None:
 )
 def test_watch_replaces_existing_watcher_for_same_agent(cli: CliRunner) -> None:
     env = os.environ.copy()
-    env["OWL_HOME"] = str(cli.home)
+    env["OWL_HOME"] = str(cli.user_home)
+    env["OWL_PROJECT_ROOT"] = str(cli.project_root)
     env["OWL_NAME"] = "Tom"
     env["PYTHONPATH"] = str(cli.repo_root / "src")
     first = subprocess.Popen(

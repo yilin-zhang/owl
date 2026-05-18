@@ -18,10 +18,10 @@ def test_owl_name_resolves_default_identity(cli: CliRunner) -> None:
     assert json.loads(stdout)["from"] == "sam"
 
 
-def test_missing_owl_name_defaults_to_global_identity(cli: CliRunner) -> None:
+def test_missing_owl_name_defaults_to_root_identity(cli: CliRunner) -> None:
     code, stdout, stderr = cli.run("whoami", "--format", "json")
     assert code == 0, stderr
-    assert json.loads(stdout)["key"] == "global"
+    assert json.loads(stdout) == {"key": "root", "name": "Root"}
 
 
 def test_empty_owl_name_is_rejected(cli: CliRunner) -> None:
@@ -31,20 +31,25 @@ def test_empty_owl_name_is_rejected(cli: CliRunner) -> None:
     assert "OWL_NAME cannot be empty" in stderr
 
 
-def test_global_key_is_reserved_for_literal_global(cli: CliRunner) -> None:
-    os.environ["OWL_NAME"] = "Global"
+def test_root_key_is_reserved_for_literal_root(cli: CliRunner) -> None:
+    os.environ["OWL_NAME"] = "root!"
     code, _stdout, stderr = cli.run("whoami")
     assert code == 1
-    assert "global is reserved" in stderr
+    assert "root is reserved" in stderr
 
-    os.environ["OWL_NAME"] = "global"
+    os.environ["OWL_NAME"] = "root"
     code, stdout, stderr = cli.run("whoami", "--format", "json")
     assert code == 0, stderr
-    assert json.loads(stdout)["key"] == "global"
+    assert json.loads(stdout) == {"key": "root", "name": "root"}
 
-
-def test_whoami_without_owl_name_touches_global_state(cli: CliRunner) -> None:
+    os.environ["OWL_NAME"] = "Root"
     code, stdout, stderr = cli.run("whoami", "--format", "json")
     assert code == 0, stderr
-    assert json.loads(stdout)["key"] == "global"
-    assert (Path(cli.home) / "state" / "agents" / "global.json").exists()
+    assert json.loads(stdout) == {"key": "root", "name": "Root"}
+
+
+def test_whoami_without_owl_name_touches_root_state(cli: CliRunner) -> None:
+    code, stdout, stderr = cli.run("whoami", "--format", "json")
+    assert code == 0, stderr
+    assert json.loads(stdout)["key"] == "root"
+    assert (Path(cli.home) / "state" / "agents" / "root.json").exists()

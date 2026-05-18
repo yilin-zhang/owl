@@ -36,4 +36,5 @@ uv run mypy src tests
 uv run owl spells list owl --all --format json
 ```
 
-Use `OWL_HOME` to isolate manual CLI tests.
+Use `OWL_PROJECT_ROOT` to isolate manual runtime tests. Use `OWL_HOME` only when
+testing user-level custom spell discovery.

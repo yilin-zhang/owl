@@ -17,7 +17,7 @@ def test_perch_status_is_read_only_when_no_agents_exist(cli: CliRunner) -> None:
     code, stdout, stderr = cli.run("perch", "status", "--format", "json")
     assert code == 0, stderr
     assert json.loads(stdout) == []
-    assert not (Path(cli.home) / "state" / "agents" / "global.json").exists()
+    assert not Path(cli.home).exists()
 
 
 @pytest.mark.skipif(
@@ -68,7 +68,8 @@ def test_perch_status_combines_state_messages_and_watch(cli: CliRunner) -> None:
     broken_watch.write_text("{not-json", encoding="utf-8")
 
     env = os.environ.copy()
-    env["OWL_HOME"] = str(cli.home)
+    env["OWL_HOME"] = str(cli.user_home)
+    env["OWL_PROJECT_ROOT"] = str(cli.project_root)
     env["OWL_NAME"] = "Tom"
     env["PYTHONPATH"] = str(cli.repo_root / "src")
     watcher = subprocess.Popen(

@@ -13,6 +13,8 @@ from .watchers import notify_watchers
 
 
 def message_events(store: Store) -> list[dict[str, Any]]:
+    if not store.messages_path.exists():
+        return []
     with store.lock("messages"):
         return store.read_jsonl(store.messages_path)
 

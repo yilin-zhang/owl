@@ -52,8 +52,15 @@ Custom spells live under:
 
 ```text
 $OWL_HOME/spells/<relative-path>/SKILL.md
+./.owl/spells/<relative-path>/SKILL.md
 ```
 
-Custom spells override built-in spells with the same relative path.
+Project spells override user spells, and user spells override built-ins with
+the same relative path. Use `OWL_PROJECT_ROOT` when the project root is not the
+current working directory; prefer an absolute path in agent launch
+configuration.
+
+Most successful Owl commands check unread messages for the current identity, so
+spell discovery still belongs to the active project context.
 
 Use `spell-creator` when creating or revising a spell.

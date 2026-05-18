@@ -27,7 +27,7 @@ owl message read <message-id>
 
 ## Identity
 
-Owl defaults to `global`. Set `OWL_NAME` before using an individual agent identity:
+Owl defaults to `Root`. Set `OWL_NAME` before using an individual agent identity:
 
 ```bash
 export OWL_NAME=Sarah
@@ -35,11 +35,17 @@ owl whoami
 ```
 
 Do not use identity flags. Owl reads the current agent name from `OWL_NAME`, or
-uses `global` when `OWL_NAME` is unset.
+uses `Root` when `OWL_NAME` is unset.
 
-Unset `OWL_NAME` intentionally means the shared `global` identity. Individual
-identities see global memory plus their own memory; the global identity sees all
-memory.
+Unset `OWL_NAME` intentionally means the shared `Root` identity. Individual
+identities see Root memory plus their own memory; the Root identity sees all
+memory in the current project.
+
+Owl stores runtime data in the current project's `./.owl`. Run commands from
+the project root, or set `OWL_PROJECT_ROOT` when the shell's working directory
+cannot be trusted. Use an absolute path for `OWL_PROJECT_ROOT` in agent launch
+configuration. `OWL_HOME` is separate and only controls user-level reusable
+spells.
 
 ## Mail
 
@@ -82,8 +88,8 @@ owl memory compact "Current compacted memory summary."
 ```
 
 Write only facts worth carrying into future agent sessions: user preferences,
-project decisions, handoff state, and compact summaries. Do not use global
-memory for transient progress updates.
+project decisions, handoff state, and compact summaries. Do not use Root memory
+for transient progress updates.
 
 ## Spells
 
@@ -94,6 +100,9 @@ owl spells list owl --all
 owl spells cast owl/messages
 owl spells cast owl/perch
 ```
+
+Most successful Owl commands check unread messages for the current identity, so
+run spell commands from the project root or with `OWL_PROJECT_ROOT` set.
 
 Prefer JSON output for agent parsing and TSV for quick human inspection.
 

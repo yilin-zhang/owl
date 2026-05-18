@@ -12,7 +12,8 @@ from .store import Store
 from .utils import parse_time, utc_now
 
 OWL_NAME_ENV_VAR = "OWL_NAME"
-GLOBAL_AGENT_NAME = "global"
+ROOT_AGENT_DISPLAY_NAME = "Root"
+ROOT_AGENT_NAME = "root"
 
 
 @dataclass(frozen=True)
@@ -31,8 +32,8 @@ def normalize_name(name: str) -> str:
 def make_ref(name: str) -> AgentRef:
     display_name = name.strip()
     key = normalize_name(display_name)
-    if key == GLOBAL_AGENT_NAME and display_name != GLOBAL_AGENT_NAME:
-        raise OwlError("global is reserved; unset OWL_NAME or set OWL_NAME=global to use it")
+    if key == ROOT_AGENT_NAME and display_name not in {ROOT_AGENT_DISPLAY_NAME, ROOT_AGENT_NAME}:
+        raise OwlError("root is reserved; unset OWL_NAME or set OWL_NAME=root to use it")
     return AgentRef(name=display_name, key=key)
 
 
@@ -42,9 +43,9 @@ def resolve_name(explicit: str | None = None) -> AgentRef:
     else:
         env_value = os.environ.get(OWL_NAME_ENV_VAR)
         if env_value is None:
-            value = GLOBAL_AGENT_NAME
+            value = ROOT_AGENT_DISPLAY_NAME
         elif not env_value.strip():
-            raise OwlError("OWL_NAME cannot be empty; unset it to use global")
+            raise OwlError("OWL_NAME cannot be empty; unset it to use Root")
         else:
             value = env_value
     return make_ref(value)
@@ -69,9 +70,11 @@ def load_state(store: Store, ref: AgentRef) -> dict[str, Any] | None:
 
 
 def list_states(store: Store) -> list[dict[str, Any]]:
-    store.ensure_base()
+    state_dir = store.home / "state" / "agents"
+    if not state_dir.exists():
+        return []
     rows: list[dict[str, Any]] = []
-    for path in sorted((store.home / "state" / "agents").glob("*.json")):
+    for path in sorted(state_dir.glob("*.json")):
         if path.name.endswith(".watch.json"):
             continue
         state = store.read_json(path, None)

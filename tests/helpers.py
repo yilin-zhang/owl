@@ -13,6 +13,8 @@ from owl_cli.cli import main
 @dataclass(frozen=True)
 class CliRunner:
     home: Path
+    project_root: Path
+    user_home: Path
     repo_root: Path
 
     def run(self, *args: str, stdin: str | None = None) -> tuple[int, str, str]:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .constants import SOURCE_BUILTIN, SOURCE_CUSTOM
 from .errors import OwlError
-from .store import Store
+from .store import Store, user_home
 
 BUILTIN_SPELLS = Path(__file__).parent / "builtin_spells"
 
@@ -83,6 +83,7 @@ def extract_description(text: str) -> str:
 
 def all_spells(store: Store) -> dict[str, dict[str, str]]:
     spells = load_builtin_spells()
+    spells.update(collect_spells_from_path(user_home() / "spells", SOURCE_CUSTOM))
     spells.update(collect_spells_from_path(store.home / "spells", SOURCE_CUSTOM))
     return spells
 
@@ -123,9 +124,12 @@ def cast_spell(store: Store, path: str) -> str:
 def resolve_spell_file(store: Store, path: str) -> Path:
     key = normalize_spell_path(path)
     spell_path = spell_file_path(BUILTIN_SPELLS, key)
-    custom_path = spell_file_path(store.home / "spells", key)
-    if custom_path.exists():
-        spell_path = custom_path
+    user_custom_path = spell_file_path(user_home() / "spells", key)
+    project_custom_path = spell_file_path(store.home / "spells", key)
+    if user_custom_path.exists():
+        spell_path = user_custom_path
+    if project_custom_path.exists():
+        spell_path = project_custom_path
     if not spell_path.exists():
         raise OwlError(f"unknown spell path: {path}")
     return spell_path

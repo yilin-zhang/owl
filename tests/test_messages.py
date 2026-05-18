@@ -187,10 +187,10 @@ def test_commands_piggyback_unread_notification_on_stderr(cli: CliRunner) -> Non
     assert json.loads(stdout)["id"] == message_id
 
 
-def test_message_defaults_to_global_sender_and_rejects_empty_recipient(cli: CliRunner) -> None:
+def test_message_defaults_to_root_sender_and_rejects_empty_recipient(cli: CliRunner) -> None:
     code, stdout, stderr = cli.run("message", "send", "Tom", "body", "--format", "json")
     assert code == 0, stderr
-    assert json.loads(stdout)["from"] == "global"
+    assert json.loads(stdout)["from"] == "root"
 
     os.environ["OWL_NAME"] = "Sarah"
     code, _stdout, stderr = cli.run("message", "send", "", "body")

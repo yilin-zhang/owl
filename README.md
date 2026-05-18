@@ -4,8 +4,13 @@
 discovery. It is designed as the durable data layer for later agent
 orchestration.
 
-Owl keeps its state in `~/.owl` by default. Set `OWL_HOME` to use a different
-runtime directory for testing or isolated projects.
+Owl keeps project runtime state in `./.owl` by default: messages, memory,
+agent heartbeat state, watches, and project-local spells. Run Owl from the
+project root, or set `OWL_PROJECT_ROOT` to point at the project explicitly.
+When setting `OWL_PROJECT_ROOT` for agent sessions, use an absolute path.
+
+`OWL_HOME` is separate. It defaults to `~/.owl` and is for user-level reusable
+spells such as `$OWL_HOME/spells/<name>/SKILL.md`.
 
 ## Install
 
@@ -23,7 +28,7 @@ owl --help
 
 ## Identity
 
-Owl defaults to the `global` identity. Set `OWL_NAME` for an individual agent:
+Owl defaults to the `Root` identity. Set `OWL_NAME` for an individual agent:
 
 ```bash
 export OWL_NAME=Sarah
@@ -37,8 +42,8 @@ OWL_NAME=Sarah codex
 OWL_NAME=Taylor claude
 ```
 
-`global` is reserved. Unset `OWL_NAME` or set `OWL_NAME=global` to use global
-memory intentionally.
+`root` is reserved. Unset `OWL_NAME` or set `OWL_NAME=root` to use Root memory
+intentionally.
 
 ## Opt-In Agent Skill
 
@@ -132,8 +137,8 @@ owl memory write "Prefers concise mailbox updates."
 owl memory show
 ```
 
-Individual agents see global memory plus their own memory. The `global` identity
-sees memory from every agent.
+Individual agents see Root memory plus their own memory. The `Root` identity
+sees memory from every agent in the current project.
 
 Discover built-in and custom spells:
 
@@ -143,18 +148,28 @@ owl spells list owl --all
 owl spells cast owl/messages
 ```
 
-Custom spells go under `$OWL_HOME/spells`.
+Custom spells can live in two places:
+
+```text
+$OWL_HOME/spells/<relative-path>/SKILL.md
+./.owl/spells/<relative-path>/SKILL.md
+```
+
+Project spells override user spells, and user spells override built-ins.
+Most successful Owl commands also check unread messages for the current
+identity, so even discovery commands should be run from the project root or
+with `OWL_PROJECT_ROOT` set.
+
+Add `.owl/` to the project `.gitignore` unless you intentionally want to commit
+project-local Owl data.
 
 ## Development
 
 ```bash
 uv lock
-owl --help
-uv run isort src tests
-uv run black src tests
 uv run pytest
-uv run python -m compileall src tests
 uv run mypy src tests
+owl --help
 ```
 
 ## License

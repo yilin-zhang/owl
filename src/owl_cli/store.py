@@ -9,10 +9,13 @@ from typing import Any, Iterator
 
 from .errors import OwlError
 
+OWL_HOME_ENV_VAR = "OWL_HOME"
+OWL_PROJECT_ROOT_ENV_VAR = "OWL_PROJECT_ROOT"
+
 
 class Store:
     def __init__(self, home: Path | None = None) -> None:
-        self.home = home or Path(os.environ.get("OWL_HOME", "~/.owl")).expanduser()
+        self.home = home or project_home()
         self._base_ready = False
 
     @property
@@ -100,6 +103,24 @@ def json_text(data: Any) -> str:
 
 def json_line(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, sort_keys=True) + "\n"
+
+
+def project_root() -> Path:
+    env_value = os.environ.get(OWL_PROJECT_ROOT_ENV_VAR)
+    if env_value is None:
+        return Path.cwd()
+    return Path(env_value).expanduser()
+
+
+def project_home() -> Path:
+    return project_root() / ".owl"
+
+
+def user_home() -> Path:
+    env_value = os.environ.get(OWL_HOME_ENV_VAR)
+    if env_value is None:
+        return Path.home() / ".owl"
+    return Path(env_value).expanduser()
 
 
 def parse_jsonl_line(path: Path, line_number: int, line: str) -> dict[str, Any] | None:

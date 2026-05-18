@@ -54,24 +54,40 @@ def test_builtin_spells_are_discoverable_and_castable(cli: CliRunner) -> None:
         assert stdout == skill_path.read_text(encoding="utf-8") + "\n"
 
 
-def test_custom_spell_overrides_builtin(cli: CliRunner) -> None:
-    custom = Path(cli.home) / "spells" / "owl" / "messages" / "SKILL.md"
-    custom.parent.mkdir(parents=True)
-    custom.write_text(
-        '---\nname: messages\ndescription: "Custom message spell."\n---\n\n# Custom Messages\n',
+def write_spell(path: Path, description: str, body: str) -> None:
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        f'---\nname: {path.parent.name}\ndescription: "{description}"\n---\n\n{body}\n',
         encoding="utf-8",
     )
+
+
+def test_custom_spell_precedence_is_builtin_user_then_project(cli: CliRunner) -> None:
+    user_custom = Path(cli.user_home) / "spells" / "owl" / "messages" / "SKILL.md"
+    project_custom = Path(cli.home) / "spells" / "owl" / "messages" / "SKILL.md"
+    write_spell(user_custom, "User message spell.", "# User Messages")
 
     code, stdout, stderr = cli.run("spells", "list", "owl/messages", "--format", "json")
     assert code == 0, stderr
     rows = json.loads(stdout)
     assert rows == [
-        {"path": "owl/messages", "source": "custom", "description": "Custom message spell."}
+        {"path": "owl/messages", "source": "custom", "description": "User message spell."}
     ]
 
     code, stdout, stderr = cli.run("spells", "cast", "owl/messages")
     assert code == 0, stderr
-    assert "# Custom Messages" in stdout
+    assert "# User Messages" in stdout
+
+    write_spell(project_custom, "Project message spell.", "# Project Messages")
+    code, stdout, stderr = cli.run("spells", "list", "owl/messages", "--format", "json")
+    assert code == 0, stderr
+    assert json.loads(stdout) == [
+        {"path": "owl/messages", "source": "custom", "description": "Project message spell."}
+    ]
+
+    code, stdout, stderr = cli.run("spells", "cast", "owl/messages")
+    assert code == 0, stderr
+    assert "# Project Messages" in stdout
 
 
 def test_spells_install_writes_codex_skill(cli: CliRunner) -> None:
@@ -116,7 +132,7 @@ def test_spells_install_uses_default_codex_home(cli: CliRunner) -> None:
 
 def test_spells_install_treats_empty_app_home_env_as_explicit_path(cli: CliRunner) -> None:
     cwd = Path(cli.home) / "cwd"
-    cwd.mkdir()
+    cwd.mkdir(parents=True)
     os.environ["CODEX_HOME"] = ""
     with contextlib.chdir(cwd):
         code, stdout, stderr = cli.run("spells", "install", "owl", "--format", "json")

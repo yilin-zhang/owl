@@ -57,10 +57,12 @@ def agent_inventory(store: Store) -> dict[str, dict[str, Any]]:
 
 
 def watch_registration_keys(store: Store) -> set[str]:
-    store.ensure_base()
+    state_dir = store.home / "state" / "agents"
+    if not state_dir.exists():
+        return set()
     suffix = ".watch.json"
     keys: set[str] = set()
-    for path in (store.home / "state" / "agents").glob(f"*{suffix}"):
+    for path in state_dir.glob(f"*{suffix}"):
         keys.add(path.name[: -len(suffix)])
     return keys
 

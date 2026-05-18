@@ -21,7 +21,7 @@ owl memory compact "Compacted memory summary."
 - `write` appends a memory event.
 - `compact` appends a compacted summary event; it does not rewrite history.
 - `show` returns effective memory from the latest compaction onward.
-- Individual identities see global memory plus their own memory.
-- The `global` identity sees all memory.
+- Individual identities see Root memory plus their own memory.
+- The `Root` identity sees all memory in the current project.
 - Memory files are local policy/audit storage, not a hard security boundary.
 - Prefer one durable fact per write.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from .agents import GLOBAL_AGENT_NAME, AgentRef, make_ref, touch_state
+from .agents import ROOT_AGENT_NAME, AgentRef, make_ref, touch_state
 from .constants import EVENT_COMPACT, EVENT_MEMORY
 from .errors import OwlError
 from .store import Store
@@ -32,13 +32,13 @@ def visible_effective_memory(store: Store, ref: AgentRef) -> list[dict[str, Any]
 
 
 def memory_scope_refs(store: Store, ref: AgentRef) -> list[AgentRef]:
-    global_ref = make_ref(GLOBAL_AGENT_NAME)
-    if ref.key == global_ref.key:
+    root_ref = make_ref(ROOT_AGENT_NAME)
+    if ref.key == root_ref.key:
         refs = [make_ref(path.stem) for path in sorted(store.home.glob("memories/*.jsonl"))]
-        if all(existing.key != global_ref.key for existing in refs):
-            refs.insert(0, global_ref)
+        if all(existing.key != root_ref.key for existing in refs):
+            refs.insert(0, root_ref)
         return refs
-    return [global_ref, ref]
+    return [root_ref, ref]
 
 
 def append_memory(store: Store, ref: AgentRef, event_type: str, text: str) -> dict[str, Any]:
