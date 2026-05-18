@@ -80,6 +80,17 @@ It exits when unread mail exists. There is no timeout unless `--timeout` is
 set. The quiet keepalive interval defaults to 300 seconds, and each pulse also
 checks for missed mail.
 
+View the current agent dashboard:
+
+```bash
+owl perch status
+owl perch status --format json
+```
+
+The perch status view is read-only. It shows agents with heartbeat or watch
+state, their presence, watch state, unread counts, and newest unread message
+metadata. It does not start, resume, or stop agent processes.
+
 Write and inspect memory:
 
 ```bash

@@ -12,6 +12,7 @@ from .errors import OwlError, die
 from .memory import append_memory, visible_effective_memory, visible_memory_events
 from .messages import MailboxWatcher, WatchRegistration, inbox_rows, read_message, send_message, sent_rows, unread_count
 from .output import format_text_message, write_json, write_tsv
+from .perch import perch_rows
 from .spells import all_spells, cast_spell, filter_spells
 from .store import Store, json_line
 
@@ -84,6 +85,13 @@ def build_parser() -> argparse.ArgumentParser:
     message_status.add_argument("--threshold", type=int, default=120)
     add_format(message_status)
     message_status.set_defaults(func=cmd_message_status)
+
+    perch = subparsers.add_parser("perch", help="Perch dashboard commands.")
+    perch_sub = perch.add_subparsers(dest="perch_command", required=True)
+    perch_status = perch_sub.add_parser("status")
+    perch_status.add_argument("--threshold", type=int, default=120)
+    add_format(perch_status)
+    perch_status.set_defaults(func=cmd_perch_status)
 
     spells = subparsers.add_parser("spells", help="Spell discovery commands.")
     spells_sub = spells.add_subparsers(dest="spells_command", required=True)
@@ -246,6 +254,28 @@ def cmd_message_status(args: argparse.Namespace, store: Store) -> int:
     for row in list_states(store):
         rows.append(status_row(row["key"], row["name"], row["state"], args.threshold))
     output_rows(rows, ["key", "name", "status", "last_seen_at"], args.format)
+    return 0
+
+
+def cmd_perch_status(args: argparse.Namespace, store: Store) -> int:
+    rows = perch_rows(store, args.threshold)
+    output_rows(
+        rows,
+        [
+            "key",
+            "name",
+            "presence",
+            "watch",
+            "watcher_pid",
+            "unread",
+            "last_seen_at",
+            "watch_started_at",
+            "newest_unread_from",
+            "newest_unread_at",
+            "newest_unread_preview",
+        ],
+        args.format,
+    )
     return 0
 
 

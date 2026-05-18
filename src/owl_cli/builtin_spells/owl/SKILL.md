@@ -61,9 +61,19 @@ Discover first, cast only when relevant:
 ```bash
 owl spells list owl --all
 owl spells cast owl/messages
+owl spells cast owl/perch
 ```
 
 Prefer JSON output for agent parsing and TSV for quick human inspection.
+
+## Perch Dashboard
+
+Inspect agent status without changing heartbeat or message read state:
+
+```bash
+owl perch status
+owl perch status --format json
+```
 
 ## Watch
 

@@ -338,6 +338,100 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(stdout, "")
 
+    def test_perch_status_is_read_only_when_no_agents_exist(self) -> None:
+        code, stdout, stderr = self.run_cli("perch", "status", "--format", "json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout), [])
+        self.assertFalse((Path(self.tmp.name) / "state" / "agents" / "global.json").exists())
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
+    def test_perch_status_combines_state_messages_and_watch(self) -> None:
+        os.environ["OWL_NAME"] = "Sarah"
+        code, _stdout, stderr = self.run_cli("whoami")
+        self.assertEqual(code, 0, stderr)
+        os.environ["OWL_NAME"] = "Lee"
+        code, _stdout, stderr = self.run_cli("whoami")
+        self.assertEqual(code, 0, stderr)
+        os.environ["OWL_NAME"] = "Sarah"
+        code, _stdout, stderr = self.run_cli("message", "send", "Lee", "hello lee")
+        self.assertEqual(code, 0, stderr)
+
+        memory_path = Path(self.tmp.name) / "memories" / "memory-only.jsonl"
+        memory_path.parent.mkdir(parents=True, exist_ok=True)
+        memory_path.write_text(
+            json.dumps(
+                {
+                    "type": "memory",
+                    "id": "memory-event",
+                    "agent": "memory-only",
+                    "created_at": utc_now(),
+                    "text": "memory only",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        stale_watch = Path(self.tmp.name) / "state" / "agents" / "ghost.watch.json"
+        stale_watch.parent.mkdir(parents=True, exist_ok=True)
+        stale_watch.write_text(
+            json.dumps(
+                {
+                    "agent": "ghost",
+                    "command": "missing watcher",
+                    "pid": 999999,
+                    "started_at": utc_now(),
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        broken_watch = Path(self.tmp.name) / "state" / "agents" / "broken.watch.json"
+        broken_watch.write_text("{not-json", encoding="utf-8")
+
+        env = os.environ.copy()
+        env["OWL_HOME"] = self.tmp.name
+        env["OWL_NAME"] = "Tom"
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+        watcher = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "owl_cli",
+                "message",
+                "watch",
+                "--timeout",
+                "30",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            self.wait_for_path(Path(self.tmp.name) / "state" / "agents" / "tom.watch.sock")
+            code, stdout, stderr = self.run_cli("perch", "status", "--format", "json")
+            self.assertEqual(code, 0, stderr)
+            rows = {row["key"]: row for row in json.loads(stdout)}
+            self.assertEqual(rows["sarah"]["presence"], "online")
+            self.assertEqual(rows["lee"]["unread"], 1)
+            self.assertEqual(rows["lee"]["newest_unread_from"], "sarah")
+            self.assertEqual(rows["lee"]["newest_unread_preview"], "hello lee")
+            self.assertEqual(rows["tom"]["watch"], "watching")
+            self.assertEqual(rows["tom"]["unread"], 0)
+            self.assertEqual(rows["ghost"]["watch"], "stale")
+            self.assertEqual(rows["ghost"]["presence"], "unknown")
+            self.assertEqual(rows["broken"]["watch"], "stale")
+            self.assertNotIn("memory-only", rows)
+        finally:
+            watcher.terminate()
+            try:
+                watcher.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                watcher.kill()
+                watcher.communicate(timeout=2)
+
     @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "event-driven watch requires Unix sockets")
     def test_watch_exits_on_message_without_waiting_for_pulse_interval(self) -> None:
         env = os.environ.copy()
