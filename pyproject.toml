@@ -25,6 +25,7 @@ owl_cli = ["builtin_spells/**/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.black]
 line-length = 100
@@ -39,5 +40,8 @@ known_first_party = ["owl_cli"]
 dev = [
     "black>=26.5.0",
     "isort>=8.0.1",
+    "mypy>=2.1.0",
     "pytest>=8",
+    "pyyaml>=6.0.3",
+    "types-pyyaml>=6.0.12.20260510",
 ]

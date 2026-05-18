@@ -1,5 +1,6 @@
 ---
-description: Manage Owl agent identity with OWL_NAME and inspect agent status safely.
+name: agents
+description: "Manage Owl agent identity with OWL_NAME and inspect agent status safely."
 ---
 
 # Owl Agents

@@ -51,8 +51,10 @@ For Codex, install the skill into the Codex skills directory:
 owl spells install owl
 ```
 
-This creates or refreshes a symlink at
-`${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md`. `CODEX_HOME` is optional.
+This creates or refreshes a symlink at `~/.codex/skills/owl/SKILL.md` by
+default, or under `CODEX_HOME` when that environment variable is set.
+The symlink keeps the registered skill live with the installed Owl source; rerun
+install if that source path changes.
 
 For Claude Code:
 
@@ -60,8 +62,10 @@ For Claude Code:
 owl spells install owl --app claude-code
 ```
 
-This creates or refreshes a symlink at
-`${CLAUDE_CONFIG_DIR:-~/.claude}/skills/owl/SKILL.md`.
+This creates or refreshes a symlink at `~/.claude/skills/owl/SKILL.md` by
+default, or under `CLAUDE_CONFIG_DIR` when that environment variable is set.
+The symlink keeps the registered skill live with the installed Owl source; rerun
+install if that source path changes.
 
 Then start a new agent session with an Owl identity:
 
@@ -150,7 +154,7 @@ uv run isort src tests
 uv run black src tests
 uv run pytest
 uv run python -m compileall src tests
-uvx mypy src tests
+uv run mypy src tests
 ```
 
 ## License

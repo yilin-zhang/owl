@@ -1,5 +1,6 @@
 ---
-description: Opt in to Owl coordination: identify the agent, read mail, write memory, inspect perch, watch for messages, and choose the right owl subcommand.
+name: owl
+description: "Opt in to Owl coordination: identify the agent, read mail, write memory, inspect perch, watch for messages, and choose the right owl subcommand."
 ---
 
 # Owl

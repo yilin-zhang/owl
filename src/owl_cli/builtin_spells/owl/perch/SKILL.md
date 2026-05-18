@@ -1,5 +1,6 @@
 ---
-description: Use or extend the Owl perch dashboard for read-only agent observability.
+name: perch
+description: "Use or extend the Owl perch dashboard for read-only agent observability."
 ---
 
 # Owl Perch

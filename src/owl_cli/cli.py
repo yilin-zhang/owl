@@ -3,26 +3,19 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 from .agents import list_states, resolve_name, status_for_state, touch_state
 from .constants import DEFAULT_WATCH_INTERVAL_SECONDS
 from .errors import OwlError, die
 from .memory import append_memory, visible_effective_memory, visible_memory_events
-from .messages import (
-    MailboxWatcher,
-    WatchRegistration,
-    inbox_rows,
-    read_message,
-    send_message,
-    sent_rows,
-    unread_count,
-)
+from .message_inputs import message_send_inputs
+from .messages import inbox_rows, read_message, send_message, sent_rows, unread_count
 from .output import format_text_message, write_json, write_tsv
 from .perch import perch_rows
 from .spells import all_spells, cast_spell, filter_spells, install_spell, normalize_spell_path
 from .store import Store, json_line
+from .watchers import MailboxWatcher, WatchRegistration
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,10 +37,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="owl")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    add_whoami_parser(subparsers)
+    add_memory_parser(subparsers)
+    add_message_parser(subparsers)
+    add_perch_parser(subparsers)
+    add_spells_parser(subparsers)
+
+    return parser
+
+
+def add_whoami_parser(subparsers: Any) -> None:
     whoami = subparsers.add_parser("whoami", help="Show the current Owl agent.")
     add_format(whoami)
     whoami.set_defaults(func=cmd_whoami)
 
+
+def add_memory_parser(subparsers: Any) -> None:
     memory = subparsers.add_parser("memory", help="Memory commands.")
     memory_sub = memory.add_subparsers(dest="memory_command", required=True)
     memory_show = memory_sub.add_parser("show")
@@ -62,6 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_format(memory_compact)
     memory_compact.set_defaults(func=cmd_memory_compact)
 
+
+def add_message_parser(subparsers: Any) -> None:
     message = subparsers.add_parser("message", help="Mailbox commands.")
     message_sub = message.add_subparsers(dest="message_command", required=True)
     message_send = message_sub.add_parser("send")
@@ -94,6 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_format(message_status)
     message_status.set_defaults(func=cmd_message_status)
 
+
+def add_perch_parser(subparsers: Any) -> None:
     perch = subparsers.add_parser("perch", help="Perch dashboard commands.")
     perch_sub = perch.add_subparsers(dest="perch_command", required=True)
     perch_status = perch_sub.add_parser("status")
@@ -101,6 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_format(perch_status)
     perch_status.set_defaults(func=cmd_perch_status)
 
+
+def add_spells_parser(subparsers: Any) -> None:
     spells = subparsers.add_parser("spells", help="Spell discovery commands.")
     spells_sub = spells.add_subparsers(dest="spells_command", required=True)
     spells_list = spells_sub.add_parser("list")
@@ -118,8 +129,6 @@ def build_parser() -> argparse.ArgumentParser:
     spells_install.add_argument("--app", choices=["codex", "claude-code"], default="codex")
     add_format(spells_install)
     spells_install.set_defaults(func=cmd_spells_install)
-
-    return parser
 
 
 def add_format(parser: argparse.ArgumentParser) -> None:
@@ -330,52 +339,13 @@ def cmd_spells_install(args: argparse.Namespace, store: Store) -> int:
     return 0
 
 
-def message_send_inputs(args: argparse.Namespace) -> tuple[list[str], str]:
-    usage = (
-        "message send supports either `owl message send NAME BODY` or "
-        "`owl message send --to NAME [--to NAME ...] [--cc NAME ...] "
-        "(--body TEXT | --body-file PATH | --stdin)`"
-    )
-    body_sources = [
-        args.body is not None,
-        args.body_file is not None,
-        args.body_stdin,
-    ]
-    flags_present = bool(args.to or args.cc or any(body_sources))
-    if flags_present and (args.recipient is not None or args.body_arg is not None):
-        raise OwlError(usage)
-    if not flags_present:
-        if args.recipient is None or args.body_arg is None:
-            raise OwlError(usage)
-        return [args.recipient], args.body_arg
-    if not args.to:
-        raise OwlError("explicit message form requires at least one --to recipient")
-    body_source_count = sum(body_sources)
-    if body_source_count > 1:
-        raise OwlError("choose only one message body source")
-    if body_source_count == 0:
-        raise OwlError("explicit message form requires --body, --body-file, or --stdin")
-
-    if args.body is not None:
-        body = args.body
-    elif args.body_file is not None:
-        try:
-            body = Path(args.body_file).read_text(encoding="utf-8")
-        except OSError as exc:
-            raise OwlError(f"failed to read message body file: {exc}") from exc
-    elif args.body_stdin:
-        body = sys.stdin.read()
-    else:
-        raise OwlError("explicit message form requires --body, --body-file, or --stdin")
-
-    return args.to, body
-
-
 def maybe_report_unread(args: argparse.Namespace, store: Store) -> None:
-    if (
-        getattr(args, "command", None) == "message"
-        and getattr(args, "message_command", None) == "watch"
-    ):
+    if getattr(args, "command", None) == "message" and getattr(args, "message_command", None) in {
+        "inbox",
+        "read",
+        "sent",
+        "watch",
+    }:
         return
     try:
         ref = resolve_name()

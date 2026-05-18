@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-import os
-import select
-import signal
-import socket
-import subprocess
-import time
 import uuid
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 from .agents import AgentRef, make_ref, touch_state
@@ -15,6 +9,7 @@ from .constants import EVENT_MESSAGE, EVENT_READ, ROLE_CC, ROLE_TO
 from .errors import OwlError
 from .store import Store
 from .utils import preview, utc_now
+from .watchers import notify_watchers
 
 
 def message_events(store: Store) -> list[dict[str, Any]]:
@@ -25,6 +20,36 @@ def message_events(store: Store) -> list[dict[str, Any]]:
 def append_message_event(store: Store, event: dict[str, Any]) -> None:
     with store.lock("messages"):
         store.append_jsonl(store.messages_path, event)
+
+
+@dataclass(frozen=True)
+class MailboxSummary:
+    messages: list[dict[str, Any]]
+    reads: set[tuple[str, str]]
+
+    def message_by_id(self, message_id: str) -> dict[str, Any] | None:
+        for message in reversed(self.messages):
+            if message.get("id") == message_id:
+                return message
+        return None
+
+    def is_read(self, message_id: object, reader: str) -> bool:
+        return isinstance(message_id, str) and (message_id, reader) in self.reads
+
+    def unread_count(self, ref: AgentRef) -> int:
+        messages: set[str] = set()
+        for message in self.messages:
+            if ref.key not in message.get("to", []) and ref.key not in message.get("cc", []):
+                continue
+            message_id = message.get("id")
+            if isinstance(message_id, str):
+                messages.add(message_id)
+        reads = {message_id for message_id, reader in self.reads if reader == ref.key}
+        return len(messages - reads)
+
+
+def mailbox_summary(store: Store) -> MailboxSummary:
+    return summarize_messages(message_events(store))
 
 
 def send_message(
@@ -58,7 +83,7 @@ def send_message(
 
 def summarize_messages(
     events: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], set[tuple[str, str]]]:
+) -> MailboxSummary:
     messages = [event for event in events if event.get("type") == EVENT_MESSAGE]
     reads: set[tuple[str, str]] = set()
     for event in events:
@@ -68,19 +93,19 @@ def summarize_messages(
         reader = event.get("reader")
         if isinstance(message_id, str) and isinstance(reader, str):
             reads.add((message_id, reader))
-    return messages, reads
+    return MailboxSummary(messages, reads)
 
 
 def inbox_rows(store: Store, ref: AgentRef) -> list[dict[str, Any]]:
-    messages, reads = summarize_messages(message_events(store))
+    summary = mailbox_summary(store)
     rows: list[dict[str, Any]] = []
-    for message in messages:
+    for message in summary.messages:
         to = message.get("to", [])
         cc = message.get("cc", [])
         if ref.key not in to and ref.key not in cc:
             continue
         role = ROLE_TO if ref.key in to else ROLE_CC
-        is_read = (message.get("id"), ref.key) in reads
+        is_read = summary.is_read(message.get("id"), ref.key)
         rows.append(
             {
                 "id": message.get("id", ""),
@@ -100,14 +125,14 @@ def inbox_rows(store: Store, ref: AgentRef) -> list[dict[str, Any]]:
 
 
 def sent_rows(store: Store, ref: AgentRef) -> list[dict[str, Any]]:
-    messages, reads = summarize_messages(message_events(store))
+    summary = mailbox_summary(store)
     rows: list[dict[str, Any]] = []
-    for message in messages:
+    for message in summary.messages:
         if message.get("from") != ref.key:
             continue
         recipients = list(dict.fromkeys(message.get("to", []) + message.get("cc", [])))
-        read_by = [name for name in recipients if (message.get("id"), name) in reads]
-        unread_by = [name for name in recipients if (message.get("id"), name) not in reads]
+        read_by = [name for name in recipients if summary.is_read(message.get("id"), name)]
+        unread_by = [name for name in recipients if not summary.is_read(message.get("id"), name)]
         rows.append(
             {
                 "id": message.get("id", ""),
@@ -126,23 +151,13 @@ def sent_rows(store: Store, ref: AgentRef) -> list[dict[str, Any]]:
 
 def read_message(store: Store, ref: AgentRef, message_id: str) -> dict[str, Any]:
     with store.lock("messages"):
-        message = None
-        already_read = False
-        for event in store.read_jsonl(store.messages_path):
-            event_type = event.get("type")
-            if event_type == EVENT_MESSAGE and event.get("id") == message_id:
-                message = event
-            elif (
-                event_type == EVENT_READ
-                and event.get("message_id") == message_id
-                and event.get("reader") == ref.key
-            ):
-                already_read = True
+        summary = summarize_messages(store.read_jsonl(store.messages_path))
+        message = summary.message_by_id(message_id)
         if not message:
             raise OwlError(f"unknown message id: {message_id}")
         if ref.key not in message.get("to", []) and ref.key not in message.get("cc", []):
             raise OwlError("message is not addressed to this agent")
-        if not already_read:
+        if not summary.is_read(message_id, ref.key):
             store.append_jsonl(
                 store.messages_path,
                 {
@@ -158,184 +173,4 @@ def read_message(store: Store, ref: AgentRef, message_id: str) -> dict[str, Any]
 
 
 def unread_count(store: Store, ref: AgentRef) -> int:
-    with store.lock("messages"):
-        messages: set[str] = set()
-        reads: set[str] = set()
-        for event in store.read_jsonl(store.messages_path):
-            event_type = event.get("type")
-            if event_type == EVENT_MESSAGE and (
-                ref.key in event.get("to", []) or ref.key in event.get("cc", [])
-            ):
-                message_id = event.get("id")
-                if isinstance(message_id, str):
-                    messages.add(message_id)
-            elif event_type == EVENT_READ and event.get("reader") == ref.key:
-                message_id = event.get("message_id")
-                if isinstance(message_id, str):
-                    reads.add(message_id)
-        return len(messages - reads)
-
-
-class MailboxWatcher:
-    def __init__(self, store: Store, ref: AgentRef) -> None:
-        self.store = store
-        self.ref = ref
-        self.path = watch_socket_path(store, ref.key)
-        self._socket: socket.socket | None = None
-
-    def __enter__(self) -> MailboxWatcher:
-        if not hasattr(socket, "AF_UNIX"):
-            raise OwlError("message watch requires Unix domain socket support")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        unlink_if_exists(self.path)
-        try:
-            self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            self._socket.bind(str(self.path))
-            self._socket.setblocking(False)
-        except OSError as exc:
-            if self._socket is not None:
-                self._socket.close()
-                self._socket = None
-            raise OwlError(f"failed to start message watcher socket: {exc}") from exc
-        return self
-
-    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
-        if self._socket is not None:
-            self._socket.close()
-            self._socket = None
-        unlink_if_exists(self.path)
-
-    def wait(self, timeout: float | None) -> bool:
-        if self._socket is None:
-            raise OwlError("mailbox watcher is not active")
-        ready, _, _ = select.select([self._socket], [], [], timeout)
-        if not ready:
-            return False
-        while True:
-            try:
-                self._socket.recv(1024)
-            except BlockingIOError:
-                break
-        return True
-
-
-class WatchRegistration:
-    def __init__(self, store: Store, ref: AgentRef) -> None:
-        self.store = store
-        self.ref = ref
-        self.pid = os.getpid()
-        self.path = store.home / "state" / "agents" / f"{ref.key}.watch.json"
-
-    def __enter__(self) -> WatchRegistration:
-        with self.store.lock(f"watch-{self.ref.key}"):
-            prior = self.store.read_json(self.path, None)
-            if isinstance(prior, dict):
-                prior_pid = prior.get("pid")
-                prior_command = prior.get("command")
-                if (
-                    isinstance(prior_pid, int)
-                    and prior_pid != self.pid
-                    and watcher_process_matches(prior_pid, prior_command)
-                ):
-                    stop_process(prior_pid, timeout=1.0)
-            unlink_if_exists(watch_socket_path(self.store, self.ref.key))
-            self.store.write_json(
-                self.path,
-                {
-                    "agent": self.ref.key,
-                    "command": process_command(self.pid),
-                    "pid": self.pid,
-                    "started_at": utc_now(),
-                },
-            )
-        return self
-
-    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
-        with self.store.lock(f"watch-{self.ref.key}"):
-            current = self.store.read_json(self.path, None)
-            if isinstance(current, dict) and current.get("pid") == self.pid:
-                try:
-                    self.path.unlink()
-                except FileNotFoundError:
-                    pass
-
-
-def stop_process(pid: int, timeout: float = 0.0, force: bool = False) -> None:
-    if pid <= 0:
-        return
-    if not process_alive(pid):
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    if timeout <= 0:
-        return
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not process_alive(pid):
-            return
-        time.sleep(0.05)
-    if force and process_alive(pid):
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-
-
-def process_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def watcher_process_matches(pid: int, expected_command: object) -> bool:
-    if not isinstance(expected_command, str):
-        return False
-    return process_command(pid) == expected_command
-
-
-def process_command(pid: int) -> str | None:
-    try:
-        result = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "command="],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=1.0,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0:
-        return None
-    command = result.stdout.strip()
-    return command or None
-
-
-def watch_socket_path(store: Store, key: str) -> Path:
-    return store.home / "state" / "agents" / f"{key}.watch.sock"
-
-
-def notify_watchers(store: Store, recipient_keys: list[str]) -> None:
-    for key in set(recipient_keys):
-        path = watch_socket_path(store, key)
-        if not path.exists():
-            continue
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as notifier:
-                notifier.sendto(b"message", str(path))
-        except OSError:
-            continue
-
-
-def unlink_if_exists(path: Path) -> None:
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
+    return mailbox_summary(store).unread_count(ref)

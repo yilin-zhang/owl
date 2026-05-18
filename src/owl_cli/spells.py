@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from .constants import SOURCE_BUILTIN, SOURCE_CUSTOM
@@ -8,6 +9,30 @@ from .errors import OwlError
 from .store import Store
 
 BUILTIN_SPELLS = Path(__file__).parent / "builtin_spells"
+
+
+@dataclass(frozen=True)
+class SkillApp:
+    key: str
+    home_env_var: str
+    default_home_name: str
+
+    def home(self) -> Path:
+        env_value = os.environ.get(self.home_env_var)
+        if env_value is None:
+            return Path.home() / self.default_home_name
+        return Path(env_value).expanduser()
+
+    def skill_path(self, spell_key: str | None) -> Path:
+        if not spell_key:
+            return self.home() / "skills" / "SKILL.md"
+        return self.home() / "skills" / spell_key / "SKILL.md"
+
+
+SKILL_APPS = {
+    "codex": SkillApp("codex", "CODEX_HOME", ".codex"),
+    "claude-code": SkillApp("claude-code", "CLAUDE_CONFIG_DIR", ".claude"),
+}
 
 
 def load_builtin_spells() -> dict[str, dict[str, str]]:
@@ -26,7 +51,6 @@ def collect_spells_from_path(root: Path, source: str) -> dict[str, dict[str, str
             "path": key,
             "source": source,
             "description": extract_description(text),
-            "content": text,
         }
     return spells
 
@@ -124,25 +148,19 @@ def install_spell(store: Store, path: str, app: str = "codex") -> Path:
 
 
 def skill_install_path(app: str, key: str | None) -> Path:
-    if app == "codex":
-        return codex_skill_path(key)
-    if app == "claude-code":
-        return claude_code_skill_path(key)
-    raise OwlError(f"unknown app: {app}")
+    try:
+        skill_app = SKILL_APPS[app]
+    except KeyError as exc:
+        raise OwlError(f"unknown app: {app}") from exc
+    return skill_app.skill_path(key)
 
 
 def codex_skill_path(key: str | None) -> Path:
-    codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
-    if not key:
-        return codex_home / "skills" / "SKILL.md"
-    return codex_home / "skills" / key / "SKILL.md"
+    return skill_install_path("codex", key)
 
 
 def claude_code_skill_path(key: str | None) -> Path:
-    claude_home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
-    if not key:
-        return claude_home / "skills" / "SKILL.md"
-    return claude_home / "skills" / key / "SKILL.md"
+    return skill_install_path("claude-code", key)
 
 
 def spell_file_path(root: Path, key: str | None) -> Path:

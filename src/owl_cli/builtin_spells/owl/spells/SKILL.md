@@ -1,5 +1,6 @@
 ---
-description: Discover and cast Owl spells without loading irrelevant instructions into context.
+name: spells
+description: "Discover and cast Owl spells without loading irrelevant instructions into context."
 ---
 
 # Owl Spells
@@ -27,8 +28,10 @@ owl spells cast owl/messages
 owl spells install owl
 ```
 
-This creates or refreshes a symlink at
-`${CODEX_HOME:-~/.codex}/skills/owl/SKILL.md` for Codex.
+This creates or refreshes a symlink at `~/.codex/skills/owl/SKILL.md` by
+default, or under `CODEX_HOME` when that environment variable is set.
+The symlink keeps the registered skill live with the installed Owl source; rerun
+install if that source path changes.
 
 For Claude Code:
 
@@ -36,8 +39,10 @@ For Claude Code:
 owl spells install owl --app claude-code
 ```
 
-This creates or refreshes a symlink at
-`${CLAUDE_CONFIG_DIR:-~/.claude}/skills/owl/SKILL.md`.
+This creates or refreshes a symlink at `~/.claude/skills/owl/SKILL.md` by
+default, or under `CLAUDE_CONFIG_DIR` when that environment variable is set.
+The symlink keeps the registered skill live with the installed Owl source; rerun
+install if that source path changes.
 
 Install handles one `SKILL.md`, not a recursive spell tree.
 
@@ -51,4 +56,4 @@ $OWL_HOME/spells/<relative-path>/SKILL.md
 
 Custom spells override built-in spells with the same relative path.
 
-Use `owl/spell-creator` when creating or revising a spell.
+Use `spell-creator` when creating or revising a spell.

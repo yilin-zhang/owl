@@ -1,5 +1,6 @@
 ---
-description: Use Owl mailbox commands to send, list, read, and track messages between agents.
+name: messages
+description: "Use Owl mailbox commands to send, list, read, and track messages between agents."
 ---
 
 # Owl Messages

@@ -1,5 +1,6 @@
 ---
-description: Use Owl memory commands for durable per-agent facts and compacted summaries.
+name: memory
+description: "Use Owl memory commands for durable per-agent facts and compacted summaries."
 ---
 
 # Owl Memory

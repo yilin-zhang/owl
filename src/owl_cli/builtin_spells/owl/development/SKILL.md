@@ -1,5 +1,6 @@
 ---
-description: Work on Owl's Python CLI implementation, tests, package layout, and uv-based verification.
+name: development
+description: "Work on Owl's Python CLI implementation, tests, package layout, and uv-based verification."
 ---
 
 # Owl Development
@@ -27,9 +28,11 @@ Keep built-in spell files under `src/owl_cli/builtin_spells`, not beside
 ## Verify
 
 ```bash
+uv run isort --check-only src tests
+uv run black --check src tests
 uv run pytest
 uv run python -m compileall src tests
-uvx mypy src tests
+uv run mypy src tests
 uv run owl spells list owl --all --format json
 ```
 

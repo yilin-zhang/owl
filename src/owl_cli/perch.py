@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from .agents import list_states, status_for_state
-from .constants import EVENT_MESSAGE, EVENT_READ
-from .messages import message_events, process_alive, watch_socket_path, watcher_process_matches
+from .messages import mailbox_summary
 from .store import Store
 from .utils import preview
+from .watchers import process_alive, watch_socket_path, watcher_process_matches
 
 WATCH_NONE = "no-watch"
 WATCH_STALE = "stale"
@@ -25,17 +26,18 @@ def perch_rows(store: Store, threshold: int) -> list[dict[str, Any]]:
         agent = inventory[key]
         state = agent.get("state") if isinstance(agent.get("state"), dict) else None
         summary = message_summaries.get(key, {})
+        registration = watch_registration(store, key)
         rows.append(
             {
                 "key": key,
                 "name": agent.get("name") or key,
                 "presence": status_for_state(state, threshold),
-                "watch": watch_status(store, key),
+                "watch": watch_status(store, key, registration),
                 "unread": summary.get("unread", 0),
                 "last_seen_at": "" if not state else state.get("last_seen_at", ""),
-                "watch_started_at": watch_started_at(store, key),
-                "watcher_pid": watcher_pid(store, key),
-                "watcher_command": watcher_command(store, key),
+                "watch_started_at": watch_started_at(registration),
+                "watcher_pid": watcher_pid(registration),
+                "watcher_command": watcher_command(registration),
                 "newest_unread_id": summary.get("newest_unread_id", ""),
                 "newest_unread_from": summary.get("newest_unread_from", ""),
                 "newest_unread_at": summary.get("newest_unread_at", ""),
@@ -64,19 +66,9 @@ def watch_registration_keys(store: Store) -> set[str]:
 
 
 def summarize_agent_messages(store: Store) -> dict[str, dict[str, Any]]:
-    events = message_events(store)
-    messages = [event for event in events if event.get("type") == EVENT_MESSAGE]
-    reads: set[tuple[str, str]] = set()
-    for event in events:
-        if event.get("type") != EVENT_READ:
-            continue
-        message_id = event.get("message_id")
-        reader = event.get("reader")
-        if isinstance(message_id, str) and isinstance(reader, str):
-            reads.add((message_id, reader))
-
+    mailbox = mailbox_summary(store)
     summaries: dict[str, dict[str, Any]] = {}
-    for message in messages:
+    for message in mailbox.messages:
         message_id = message.get("id")
         created_at = string_value(message.get("created_at"))
         sender = string_value(message.get("from"))
@@ -91,7 +83,7 @@ def summarize_agent_messages(store: Store) -> dict[str, dict[str, Any]]:
             summary["latest_inbound_at"] = latest_time(
                 summary.get("latest_inbound_at", ""), created_at
             )
-            if isinstance(message_id, str) and (message_id, recipient) not in reads:
+            if isinstance(message_id, str) and not mailbox.is_read(message_id, recipient):
                 summary["unread"] = int(summary.get("unread", 0)) + 1
                 if created_at >= string_value(summary.get("newest_unread_at")):
                     summary["newest_unread_id"] = message_id
@@ -125,10 +117,9 @@ def message_recipients(message: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(recipients))
 
 
-def watch_status(store: Store, key: str) -> str:
-    registration = watch_registration(store, key)
+def watch_status(store: Store, key: str, registration: dict[str, Any] | None) -> str:
     if not registration:
-        return WATCH_NONE
+        return WATCH_STALE if watch_registration_path(store, key).exists() else WATCH_NONE
     pid = registration.get("pid")
     command = registration.get("command")
     if (
@@ -141,35 +132,35 @@ def watch_status(store: Store, key: str) -> str:
     return WATCH_STALE
 
 
-def watcher_pid(store: Store, key: str) -> int | str:
-    registration = watch_registration(store, key)
+def watcher_pid(registration: dict[str, Any] | None) -> int | str:
     if not registration:
         return ""
     pid = registration.get("pid")
     return pid if isinstance(pid, int) else ""
 
 
-def watcher_command(store: Store, key: str) -> str:
-    registration = watch_registration(store, key)
+def watcher_command(registration: dict[str, Any] | None) -> str:
     if not registration:
         return ""
     return string_value(registration.get("command"))
 
 
-def watch_started_at(store: Store, key: str) -> str:
-    registration = watch_registration(store, key)
+def watch_started_at(registration: dict[str, Any] | None) -> str:
     if not registration:
         return ""
     return string_value(registration.get("started_at"))
 
 
 def watch_registration(store: Store, key: str) -> dict[str, Any] | None:
-    path = store.home / "state" / "agents" / f"{key}.watch.json"
     try:
-        registration = store.read_json(path, None)
+        registration = store.read_json(watch_registration_path(store, key), None)
     except json.JSONDecodeError:
-        return {"malformed": True}
+        return None
     return registration if isinstance(registration, dict) else None
+
+
+def watch_registration_path(store: Store, key: str) -> Path:
+    return store.home / "state" / "agents" / f"{key}.watch.json"
 
 
 def latest_time(current: str, candidate: str) -> str:
